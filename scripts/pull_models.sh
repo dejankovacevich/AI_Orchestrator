@@ -3,7 +3,7 @@ set -euo pipefail
 
 MODELS=(
   "qwen3:30b-a3b"
-  "qwen3-coder:30b-a3b"
+  "qwen3-coder:30b"
   "deepseek-r1:8b"
 )
 LARGE_MODEL="llama3.3:70b"

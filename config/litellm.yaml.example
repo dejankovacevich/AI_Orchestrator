@@ -9,7 +9,7 @@ model_list:
       api_base: http://localhost:11434
   - model_name: local-coder
     litellm_params:
-      model: ollama/qwen3-coder:30b-a3b
+      model: ollama/qwen3-coder:30b
       api_base: http://localhost:11434
   - model_name: local-reasoner
     litellm_params:

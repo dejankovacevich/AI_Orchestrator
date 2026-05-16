@@ -168,7 +168,7 @@ bash scripts/pull_models.sh
 
 This pulls the three default models:
 - `qwen3:30b-a3b` — the workhorse (`local-main`)
-- `qwen3-coder:30b-a3b` — for code tasks (`local-coder`)
+- `qwen3-coder:30b` — for code tasks (`local-coder`)
 - `deepseek-r1:8b` — for reasoning checks (`local-reasoner`)
 
 The big 70B (`local-secondary`) is skipped by default. To pull it

@@ -128,7 +128,7 @@ Today, the gate covers these model groups (defined in
 LOCAL_MODEL_GROUPS = frozenset({
     "local-main",       # → qwen3:30b-a3b
     "local-secondary",  # → llama3.3:70b
-    "local-coder",      # → qwen3-coder:30b-a3b
+    "local-coder",      # → qwen3-coder:30b
     "local-reasoner",   # → deepseek-r1:8b
 })
 ```

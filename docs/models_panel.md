@@ -115,7 +115,7 @@ longer-lived loads.
 ```yaml
 local-main:       qwen3:30b-a3b
 local-secondary:  llama3.3:70b
-local-coder:      qwen3-coder:30b-a3b
+local-coder:      qwen3-coder:30b
 local-reasoner:   deepseek-r1:8b
 cloud-claude-opus: claude-opus-4-7
 ```
