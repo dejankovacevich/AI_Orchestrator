@@ -1,0 +1,69 @@
+name: local-ai-orchestrator
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: localai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: localai
+      POSTGRES_PASSWORD: localai
+      POSTGRES_DB: localai
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localai -d localai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.26
+    container_name: localai-temporal
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: localai
+      POSTGRES_PWD: localai
+      POSTGRES_SEEDS: postgres
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "127.0.0.1:7233:7233"
+    volumes:
+      - temporal_data:/etc/temporal
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    container_name: localai-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8233
+    ports:
+      - "127.0.0.1:8233:8080"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: localai-open-webui
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      WEBUI_AUTH: "false"
+    ports:
+      - "127.0.0.1:3000:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+
+volumes:
+  postgres_data:
+  temporal_data:
+  open_webui_data:

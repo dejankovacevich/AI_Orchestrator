@@ -1,0 +1,30 @@
+{
+  "title": "Sample Morning Prep",
+  "objective": "Prepare a private morning brief from selected notes.",
+  "status": "READY_FOR_OVERNIGHT",
+  "readiness_score": 0.88,
+  "high_stakes": false,
+  "cloud_policy": {
+    "allowed": false,
+    "explicit": true
+  },
+  "source_policy": {
+    "scope": "Only ~/LocalAI/inbox/notes and ~/LocalAI/inbox/docs"
+  },
+  "output_policy": {
+    "format": "Standard morning markdown packet"
+  },
+  "desired_outputs": [
+    "01_MORNING_BRIEF.md",
+    "02_TODAY_PRIORITIES.md",
+    "05_RISKS_AND_BLOCKERS.md"
+  ],
+  "audience": "private user",
+  "assumption_policy": "Infer low-risk priorities, but label assumptions.",
+  "escalation_policy": "Human review for missing sources or unclear ownership.",
+  "success_criteria": [
+    "Clear priorities",
+    "Risks identified",
+    "Sources respected"
+  ]
+}

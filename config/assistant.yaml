@@ -1,0 +1,43 @@
+local_ai_root: ~/LocalAI
+inbox_dir: ~/LocalAI/inbox
+output_dir: ~/LocalAI/output
+archive_dir: ~/LocalAI/archive
+log_dir: ~/LocalAI/logs
+work_packets_dir: ~/LocalAI/work_packets
+
+obsidian_vault_dir: ~/Obsidian/LocalAI-ChiefOfStaff
+
+ollama_base_url: http://localhost:11434
+litellm_base_url: http://localhost:4000
+temporal_address: localhost:7233
+postgres_url: postgresql://localai:localai@localhost:5432/localai
+
+day_mode_start: "07:30"
+night_mode_start: "01:30"
+night_mode_end: "07:00"
+
+clarification_required: true
+minimum_readiness_for_overnight: 0.85
+minimum_readiness_for_high_stakes: 0.90
+minimum_readiness_for_cloud_enabled: 0.90
+max_clarification_questions_per_round: 7
+allow_execution_with_non_blocking_gaps: true
+block_execution_if_cloud_policy_unclear: true
+block_execution_if_sources_unclear: true
+block_execution_if_output_unclear: true
+
+cloud_fallback_enabled: false
+cloud_fallback_policy: explicit_only
+daily_cloud_budget_usd: 5.00
+
+archive_processed_files: true
+no_original_file_modification: true
+no_email_sending: true
+no_external_api_writes: true
+
+quality_threshold_pass: 0.80
+quality_threshold_retry: 0.65
+max_local_attempts: 2
+max_chars_per_chunk: 12000
+temperature: 0.2
+top_p: 0.9

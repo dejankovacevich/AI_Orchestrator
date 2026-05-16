@@ -1,0 +1,18 @@
+obsidian_enabled: true
+obsidian_vault_dir: ~/Obsidian/LocalAI-ChiefOfStaff
+write_daily_briefs_to_obsidian: true
+write_work_packets_to_obsidian: true
+write_memory_candidates_to_review_queue: true
+allow_direct_existing_note_updates: false
+
+vector_store: chroma
+vector_store_dir: ~/LocalAI/state/chroma
+embed_selected_outputs: true
+embed_obsidian_vault: true
+
+memory_policy:
+  save_confirmed_facts_only: true
+  inferred_memory_requires_review: true
+  stale_memory_days: 90
+  require_source_path: true
+  require_confidence_label: true

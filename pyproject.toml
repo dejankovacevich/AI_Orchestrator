@@ -1,0 +1,35 @@
+[project]
+name = "local-ai-orchestrator"
+version = "0.1.0"
+description = "Local-first clarification-driven AI work orchestrator for a private Mac."
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "temporalio",
+  "langgraph",
+  "langchain",
+  "langchain-ollama",
+  "litellm",
+  "pydantic",
+  "pandas",
+  "pyyaml",
+  "python-dotenv",
+  "psycopg[binary]",
+  "sqlalchemy",
+  "chromadb",
+  "streamlit",
+  "requests",
+  "rich",
+  "loguru",
+  "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.local-ai-orchestrator]
+status = "v1-scaffold"
+local_first = true
+cloud_default = false
