@@ -260,7 +260,7 @@ If Docker Compose is missing, the script skips only that check and prints the ma
 - No emails, calendar invites, Slack messages, production API writes, or production actions in v1.
 - No original user file modification.
 - No service exposure beyond localhost.
-- No local model calls in `DAY_MODE` by default. All local-* model groups (`local-main`, `local-secondary`, `local-coder`, `local-reasoner`) require `NIGHT_MODE` or an explicit manual override. Day mode is clarification and deterministic logic only.
+- No local model calls in `DAY_MODE` by default. All local-* model groups (`local-main`, `local-secondary`, `local-coder`, `local-reasoner`) require `NIGHT_MODE` or an explicit manual override. Day mode is clarification and deterministic logic only. To deliberately allow local models during the day, use the day-unlock switch — see [docs/day_unlock.md](docs/day_unlock.md).
 - No model pulls unless explicitly invoked.
 - No launchd loading unless manually approved.
 

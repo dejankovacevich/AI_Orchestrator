@@ -13,6 +13,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from assistant_core.clarification.graph import run_deterministic_clarification
 from assistant_core.config import load_assistant_config
 from assistant_core.execution.graph import describe_execution_scaffold
+from assistant_core.safety import (
+    DAY_UNLOCK_ENV_VAR,
+    day_unlock_active,
+    day_unlock_flag_path,
+)
 from assistant_core.storage import StorageUnavailable, list_work_packets
 
 
@@ -29,9 +34,28 @@ def main() -> None:
     st.caption("Local-first, clarification-driven work orchestration. v1 scaffold.")
 
     mode = current_mode()
-    st.metric("Current mode", mode)
-    if mode == "DAY_MODE":
-        st.info("Day mode: clarification only. Heavy local models and cloud are blocked by default.")
+    col_mode, col_unlock = st.columns(2)
+    col_mode.metric("Current mode", mode)
+    unlocked = day_unlock_active()
+    col_unlock.metric("Day unlock", "ACTIVE" if unlocked else "off")
+
+    if unlocked:
+        flag_path = day_unlock_flag_path()
+        details_lines: list[str] = []
+        if flag_path.exists():
+            try:
+                details_lines.append(f"Flag file: `{flag_path}`")
+                contents = flag_path.read_text(encoding="utf-8").strip()
+                if contents:
+                    details_lines.append("```\n" + contents + "\n```")
+            except OSError:
+                details_lines.append(f"Flag file exists but could not be read: {flag_path}")
+        if os.environ.get(DAY_UNLOCK_ENV_VAR):
+            details_lines.append(f"Environment variable `{DAY_UNLOCK_ENV_VAR}` is set in this server process.")
+        details_lines.append("Local-* model groups can run in DAY_MODE. Lock again with: `bash scripts/day_lock.sh`")
+        st.error("Day unlock is ACTIVE — local models can load during the day.\n\n" + "\n\n".join(details_lines))
+    elif mode == "DAY_MODE":
+        st.info("Day mode: clarification only. All local model groups and cloud are blocked by default.")
     st.warning("Claude/cloud fallback is disabled unless every policy gate is explicitly satisfied.")
 
     tabs = st.tabs(["Dashboard", "Create Work Packet", "Clarification", "Execution", "Artifacts"])
