@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 
 from assistant_core.safety import (
+    LOCAL_MODEL_GROUPS,
     SafetyError,
     assert_cloud_allowed,
     assert_heavy_execution_allowed,
+    assert_model_allowed,
     assert_original_file_write_allowed,
 )
 
@@ -60,3 +62,23 @@ def test_original_file_modification_blocked(tmp_path):
 def test_daytime_heavy_execution_blocked_by_default():
     with pytest.raises(SafetyError, match="DAY_MODE"):
         assert_heavy_execution_allowed("DAY_MODE", manual_override=False)
+
+
+@pytest.mark.parametrize("model_group", sorted(LOCAL_MODEL_GROUPS))
+def test_every_local_model_group_blocked_in_day_mode(model_group):
+    with pytest.raises(SafetyError, match="DAY_MODE"):
+        assert_model_allowed(model_group, "DAY_MODE", manual_override=False)
+
+
+@pytest.mark.parametrize("model_group", sorted(LOCAL_MODEL_GROUPS))
+def test_local_model_groups_allowed_in_night_mode(model_group):
+    assert_model_allowed(model_group, "NIGHT_MODE", manual_override=False)
+
+
+def test_local_model_allowed_in_day_mode_with_explicit_override():
+    assert_model_allowed("local-main", "DAY_MODE", manual_override=True)
+
+
+def test_cloud_claude_blocked_at_model_selection_layer():
+    with pytest.raises(SafetyError, match="cloud policy"):
+        assert_model_allowed("cloud-claude-opus", "NIGHT_MODE", manual_override=True)

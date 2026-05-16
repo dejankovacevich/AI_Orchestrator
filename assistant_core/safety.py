@@ -5,7 +5,9 @@ from pathlib import Path
 from assistant_core.paths import is_relative_to, resolve_user_path
 
 
-HEAVY_LOCAL_MODELS = {"local-secondary", "llama3.3:70b"}
+LOCAL_MODEL_GROUPS = frozenset(
+    {"local-main", "local-secondary", "local-coder", "local-reasoner"}
+)
 
 
 class SafetyError(RuntimeError):
@@ -57,13 +59,13 @@ def assert_original_file_write_allowed(target: str | Path, allowed_write_roots: 
 def assert_heavy_execution_allowed(mode: str, *, manual_override: bool = False) -> None:
     normalized = mode.upper()
     if normalized == "DAY_MODE" and not manual_override:
-        raise SafetyError("Heavy execution is blocked in DAY_MODE without explicit manual override.")
+        raise SafetyError("Local model execution is blocked in DAY_MODE without explicit manual override.")
     if normalized not in {"DAY_MODE", "NIGHT_MODE", "MANUAL_RESUME"}:
         raise SafetyError(f"Unknown execution mode: {mode}")
 
 
 def assert_model_allowed(model_group: str, mode: str, *, manual_override: bool = False) -> None:
-    if model_group in HEAVY_LOCAL_MODELS:
-        assert_heavy_execution_allowed(mode, manual_override=manual_override)
     if model_group == "cloud-claude-opus":
         raise SafetyError("Claude must be authorized through cloud policy checks, not model selection alone.")
+    if model_group in LOCAL_MODEL_GROUPS:
+        assert_heavy_execution_allowed(mode, manual_override=manual_override)
