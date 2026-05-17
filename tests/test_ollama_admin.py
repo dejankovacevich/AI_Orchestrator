@@ -128,12 +128,17 @@ def test_load_model_allowed_with_manual_override_calls_generate():
     assert body["keep_alive"] == "30m"
 
 
-def test_unload_model_sends_keep_alive_zero():
+def test_unload_model_sends_keep_alive_zero_seconds_string():
     poster = _fake_post(SAMPLE_GENERATE_RESPONSE)
     with patch.object(ollama_admin, "_post", side_effect=poster):
         ollama_admin.unload_model("qwen3:30b-a3b")
     _, body, _ = poster.last_call
-    assert body["keep_alive"] == 0
+    # Must be the string "0s" not the integer 0: some Ollama versions
+    # treat int 0 as "use default keep_alive" and silently re-pin the
+    # model instead of unloading. "0s" is a Go duration that always
+    # parses as zero.
+    assert body["keep_alive"] == "0s"
+    assert body["prompt"] == ""
 
 
 def test_quick_prompt_blocked_in_strict_day_mode():

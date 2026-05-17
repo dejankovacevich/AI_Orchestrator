@@ -161,10 +161,16 @@ def unload_model(tag: str) -> dict[str, Any]:
     """Drop a model from memory immediately.
 
     No safety gate: unloading is always safe.
+
+    Ollama 0.x treats ``keep_alive: 0`` (int) as "use default" (5m) on
+    some versions, which silently re-pins the model instead of unloading
+    it. The string form ``"0s"`` is parsed as a Go duration of zero
+    seconds and unloads immediately, matching the behavior of
+    ``ollama stop <tag>``.
     """
     return _post(
         "/api/generate",
-        {"model": tag, "prompt": "", "stream": False, "keep_alive": 0},
+        {"model": tag, "prompt": "", "stream": False, "keep_alive": "0s"},
         timeout=_DEFAULT_TIMEOUT,
     )
 
