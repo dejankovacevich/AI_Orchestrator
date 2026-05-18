@@ -3,6 +3,23 @@ name = "local-ai-orchestrator"
 version = "0.1.0"
 description = "Local-first clarification-driven AI work orchestrator for a private Mac."
 readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Dejan K.", email = "dejansaudi@gmail.com" },
+]
+maintainers = [
+  { name = "Dejan K.", email = "dejansaudi@gmail.com" },
+]
+keywords = ["local-first", "ai", "orchestrator", "ollama", "temporal", "clarification"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Office/Business",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.11,<3.15"
 dependencies = [
   "temporalio",

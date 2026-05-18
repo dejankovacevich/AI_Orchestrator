@@ -72,7 +72,7 @@ def inbox_with_one_note(tmp_path: Path) -> Path:
     inbox.mkdir(parents=True)
     note = inbox / "2026-W20-recap.md"
     note.write_text(
-        "Met with Tania about Q3 staffing. Decision needed on hire vs reallocate.\n"
+        "Met with Scope1 about Q3 staffing. Decision needed on hire vs reallocate.\n"
         "Risk: vendor X renewal deadline Friday.\n"
         "Priority: get back to legal before noon.\n",
         encoding="utf-8",

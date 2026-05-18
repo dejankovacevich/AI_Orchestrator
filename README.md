@@ -436,3 +436,16 @@ Scaffolded:
 - real pause/resume UI
 - semantic memory indexing workflow
 - Claude review path after policy gates
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for full text.
+
+Copyright (c) 2026 Dejan K.
+
+## Author / Contact
+
+- **Author:** Dejan K.
+- **Contact:** dejansaudi@gmail.com
+
+Issues and pull requests welcome via the GitHub repository. Note that this is a private-by-design tool — if you fork it, the safety defaults (no cloud calls without explicit gates, no external writes, day-mode model-loading lock) are part of the intent, not the friction. Please keep them.
