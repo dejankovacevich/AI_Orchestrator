@@ -45,8 +45,42 @@ async def score_readiness_activity(title: str, description: str) -> dict:
 
 @_activity_defn("run_langgraph_execution_activity")
 async def run_langgraph_execution_activity(work_packet_id: str) -> dict:
-    scaffold = describe_execution_scaffold()
-    return {"work_packet_id": work_packet_id, **scaffold}
+    """Execute one work packet end-to-end via the runner.
+
+    The workflow passes mode="NIGHT_MODE" implicitly via the LOCALAI_MODE env
+    var the launchd plist sets; we pass it through here.
+    """
+    import os
+
+    from assistant_core.execution.runner import run_execution_for_packet
+
+    mode = os.environ.get("LOCALAI_MODE", "NIGHT_MODE")
+    try:
+        result = run_execution_for_packet(
+            work_packet_id=work_packet_id,
+            mode=mode,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        return {
+            "work_packet_id": work_packet_id,
+            "status": "FAILED",
+            "error": str(exc),
+            "scaffold": describe_execution_scaffold(),
+        }
+
+    return {
+        "work_packet_id": str(result.work_packet_id),
+        "execution_run_id": str(result.execution_run_id) if result.execution_run_id else None,
+        "status": result.status,
+        "files_processed": result.files_processed,
+        "files_failed": result.files_failed,
+        "model_calls": result.model_calls,
+        "artifacts_written": result.artifacts_written,
+        "memory_candidates": result.memory_candidates,
+        "output_dir": result.output_dir,
+        "obsidian_brief_path": result.obsidian_brief_path,
+        "errors": result.errors[:10],
+    }
 
 
 @_activity_defn("write_outputs_activity")

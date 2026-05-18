@@ -135,3 +135,51 @@ class MemoryCandidate(BaseModel):
     approved: bool = False
     source_path: str
     created_at: datetime = Field(default_factory=utc_now)
+
+
+ExecutionStatus = Literal[
+    "STARTED",
+    "NO_SOURCES",
+    "NO_PACKETS",
+    "BLOCKED_BY_SAFETY",
+    "COMPLETED",
+    "PARTIAL_FAILURE",
+    "FAILED",
+]
+
+
+class FileExecutionRecord(BaseModel):
+    """Per-source-file outcome from one execution run."""
+
+    file_path: str
+    classified_as: str = "general"
+    primary_model_group: str = "local-main"
+    primary_model_tag: str | None = None
+    chunks_processed: int = 0
+    bytes_in: int = 0
+    chars_out: int = 0
+    evaluation_passed: bool = False
+    retry_attempted: bool = False
+    retry_succeeded: bool = False
+    secondary_model_group: str | None = None
+    error: str | None = None
+
+
+class ExecutionResult(BaseModel):
+    """Summary returned by run_execution_for_packet."""
+
+    work_packet_id: UUID
+    execution_run_id: UUID | None = None
+    status: ExecutionStatus = "STARTED"
+    mode: str = "DAY_MODE"
+    output_dir: str | None = None
+    obsidian_brief_path: str | None = None
+    files_processed: int = 0
+    files_failed: int = 0
+    model_calls: int = 0
+    artifacts_written: int = 0
+    memory_candidates: int = 0
+    file_records: list[FileExecutionRecord] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    started_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None

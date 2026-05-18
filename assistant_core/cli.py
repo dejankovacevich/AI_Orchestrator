@@ -146,6 +146,43 @@ def cmd_run_ready_overnight(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_run_packet_execution(args: argparse.Namespace) -> int:
+    """Run the execution runner directly (skip Temporal). Useful for local testing."""
+    import os
+
+    from assistant_core.execution.runner import run_execution_for_packet
+
+    mode = args.mode or os.environ.get("LOCALAI_MODE", "DAY_MODE")
+    try:
+        result = run_execution_for_packet(
+            work_packet_id=args.work_packet_id,
+            mode=mode,
+            manual_override=args.manual_override,
+        )
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    _print_json(
+        {
+            "work_packet_id": str(result.work_packet_id),
+            "execution_run_id": str(result.execution_run_id) if result.execution_run_id else None,
+            "status": result.status,
+            "mode": result.mode,
+            "files_processed": result.files_processed,
+            "files_failed": result.files_failed,
+            "model_calls": result.model_calls,
+            "artifacts_written": result.artifacts_written,
+            "memory_candidates": result.memory_candidates,
+            "output_dir": result.output_dir,
+            "obsidian_brief_path": result.obsidian_brief_path,
+            "errors": result.errors,
+            "file_records": [r.model_dump() for r in result.file_records],
+        }
+    )
+    return 0 if result.status in {"COMPLETED", "NO_PACKETS"} else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="local-ai-orchestrator")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -169,6 +206,24 @@ def build_parser() -> argparse.ArgumentParser:
     answer.set_defaults(func=cmd_answer_questions)
 
     sub.add_parser("run-ready-overnight").set_defaults(func=cmd_run_ready_overnight)
+
+    run_pkt = sub.add_parser(
+        "run-packet-execution",
+        help="Run the execution runner on one work packet (bypasses Temporal).",
+    )
+    run_pkt.add_argument("work_packet_id")
+    run_pkt.add_argument(
+        "--mode",
+        default=None,
+        help="LOCALAI_MODE value (DAY_MODE, NIGHT_MODE, MANUAL_RESUME). Defaults to env var.",
+    )
+    run_pkt.add_argument(
+        "--manual-override",
+        action="store_true",
+        help="Bypass the day gate explicitly for this run.",
+    )
+    run_pkt.set_defaults(func=cmd_run_packet_execution)
+
     return parser
 
 
