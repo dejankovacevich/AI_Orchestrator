@@ -9,7 +9,7 @@ This is not a chatbot. V1 is a usable clarification and control scaffold. Full o
 Run every command from the project root:
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 ```
 
 ### 1. Check The Mac
@@ -129,7 +129,7 @@ LOCALAI_PULL_LLAMA70B=true bash scripts/pull_models.sh
 Use a separate terminal tab:
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 bash scripts/start_litellm.sh
 ```
 
@@ -140,7 +140,7 @@ LiteLLM runs on <http://localhost:4000>. Local model fallback is allowed. Blind 
 Use another terminal tab:
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 bash scripts/start_temporal_worker.sh
 ```
 
@@ -151,7 +151,7 @@ The worker listens on task queue `local-ai-orchestrator`.
 Use another terminal tab:
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 bash scripts/start_control_panel.sh
 ```
 

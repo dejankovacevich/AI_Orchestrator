@@ -98,7 +98,7 @@ You only do this once per Mac. Skip this section if your system is already
 bootstrapped (which yours is).
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 
 # 1. Verify hardware, OS, Docker, Ollama, Homebrew, ports
 bash scripts/check_system.sh
@@ -125,7 +125,7 @@ Every time you want to actually use the system, run these in order. None of
 them load models or do heavy work — they just bring services online.
 
 ```bash
-cd /Users/macbookpro/Projects/local-ai-orchestrator
+cd ~/Projects/local-ai-orchestrator
 
 # 1. Make sure Ollama is running (as a brew service, survives reboots)
 brew services start ollama

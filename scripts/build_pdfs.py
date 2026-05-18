@@ -815,7 +815,7 @@ def build_system_guide(styles) -> list:
             styles,
             "$ cat ~/LocalAI/state/day_unlock.flag\n"
             "unlocked_at: 2026-05-17T03:48:22Z\n"
-            "unlocked_by: macbookpro@Mac\n"
+            "unlocked_by: user@host\n"
             "reason: spot-checking the morning brief",
         ),
         p(
@@ -1089,14 +1089,14 @@ def build_system_guide(styles) -> list:
             styles,
             ">>> from assistant_core.safety import assert_cloud_allowed\n"
             ">>> assert_cloud_allowed(\n"
-            "...     file_path='/Users/me/LocalAI/inbox/cloud_review/brief.cloud.md',\n"
+            "...     file_path='~/LocalAI/inbox/cloud_review/brief.cloud.md',\n"
             "...     cloud_fallback_enabled=False,   # config gate -> raises\n"
             "...     work_packet_cloud_allowed=True,\n"
             "...     high_stakes=True,\n"
             "...     local_quality_gate_failed=True,\n"
             "...     anthropic_api_key='sk-...',\n"
             "...     daily_budget_remaining=True,\n"
-            "...     cloud_review_dir='/Users/me/LocalAI/inbox/cloud_review',\n"
+            "...     cloud_review_dir='~/LocalAI/inbox/cloud_review',\n"
             "... )\n"
             "SafetyError: Cloud fallback is disabled by configuration.",
         ),
@@ -1741,7 +1741,7 @@ def build_onboarding(styles) -> list:
         p(styles, "H1", "1. Quick reference"),
         p(styles, "Body",
           "Every common operation, one row. Run all commands from the project root: "
-          "<font face=\"Courier\">cd /Users/macbookpro/Projects/local-ai-orchestrator</font>."),
+          "<font face=\"Courier\">cd ~/Projects/local-ai-orchestrator</font>."),
         section_table(
             [
                 ["Goal", "Command"],
@@ -1784,7 +1784,7 @@ def build_onboarding(styles) -> list:
           "of them load models or do heavy work; they just bring services online."),
         code_block(
             styles,
-            "cd /Users/macbookpro/Projects/local-ai-orchestrator\n"
+            "cd ~/Projects/local-ai-orchestrator\n"
             "\n"
             "# 1. Make sure Ollama is running (persistent service)\n"
             "brew services start ollama\n"

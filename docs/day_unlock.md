@@ -228,7 +228,7 @@ on?" by reading the file:
 ```text
 $ cat ~/LocalAI/state/day_unlock.flag
 unlocked_at: 2026-05-16T14:47:01Z
-unlocked_by: macbookpro@Mac
+unlocked_by: user@host
 reason: spot-checking a packet during the workday
 ```
 
