@@ -249,6 +249,97 @@ OUTPUT FORMAT
 Return only the Markdown above. No preamble."""
 
 
+# ---------- test_generation ----------------------------------------------
+
+TEST_GENERATION_EXTRACT_TEMPLATE = """You are analyzing one source file to identify test generation opportunities.
+
+WORK PACKET CONTEXT
+- Title: {title}
+- Objective: {objective}
+- Audience: {audience}
+- Quality bar: {quality_threshold}
+- Assumption policy: {assumption_policy}
+- Stop conditions: {escalation_policy}
+
+SOURCE FILE
+- Path: {source_path}
+- Kind: {kind}
+
+SOURCE CONTENT (verbatim; reference function names and line ranges in your findings):
+---
+{content}
+---
+
+INSTRUCTIONS
+1. Read the file end-to-end before writing anything.
+2. Each finding must reference specific function names, classes, or line ranges.
+3. If a section has no content, write "(none)" - do not pad.
+4. Stay within the file's existing dependency set; do not propose new libraries.
+5. Label every inference with "Assumption:" prefix.
+
+REQUIRED SECTIONS
+
+## Missing test cases
+- One bullet per untested or under-tested path. Each: <case>. Where: <function/class/lines>. Why it matters: <one line>.
+
+## Edge cases to cover
+- One bullet per edge case. Each: <case>. Where: <function/class/lines>. Risk if untested: <one line>.
+
+## Test scaffolding suggestions
+- Concrete scaffolding hints (fixtures, mocks, parametrize patterns) scoped to this file. If none warranted, write "(none)".
+
+## Assumptions made
+- One bullet per inference you made while analyzing. Each prefixed "Assumption:".
+
+Return only the Markdown above. No preamble, no postscript."""
+
+
+TEST_GENERATION_SYNTHESIZE_TEMPLATE = """You are synthesizing test generation findings across multiple files into a single proposed test document.
+
+WORK PACKET CONTEXT
+- Title: {title}
+- Objective: {objective}
+- Audience: {audience}
+- Quality bar: {quality_threshold}
+- Assumption policy: {assumption_policy}
+- Escalation policy: {escalation_policy}
+- Success criteria: {success_criteria}
+
+PER-FILE EXTRACTIONS (one per source file processed):
+{extractions}
+
+INSTRUCTIONS
+Produce one Markdown document named @1_PROPOSED_TESTS.md, structured as below.
+- Group all findings by source file.
+- Preserve all function-name and line-range citations from the per-file extractions.
+- Do not invent test cases not present in the extractions.
+- Preserve "Assumption:" labels.
+
+OUTPUT FORMAT
+
+# Proposed Tests - {today}
+
+## Tests grouped by source file
+
+### `<file path>`
+**Missing test cases:** <bullets with function/line refs>
+**Edge cases:** <bullets with function/line refs>
+**Scaffolding suggestions:** <bullets or short code blocks>
+
+(repeat per file)
+
+## Cross-file observations
+<bullets when something spans multiple files; otherwise "(none)">
+
+## Assumptions list
+<flattened from per-file extractions>
+
+## Confidence
+<one-line self-assessment: low / medium / high, with one sentence why>
+
+Return only the Markdown above. No preamble."""
+
+
 # =========================================================================
 # Template registry. Adding a new task type:
 #   1. Add a literal to schemas.TaskType.
@@ -260,13 +351,15 @@ Return only the Markdown above. No preamble."""
 EXTRACT_TEMPLATES: dict[str, str] = {
     "morning_brief": MORNING_BRIEF_EXTRACT_TEMPLATE,
     "code_review": CODE_REVIEW_EXTRACT_TEMPLATE,
-    # test_generation / doc_generation / decision_capture / risk_scan
+    "test_generation": TEST_GENERATION_EXTRACT_TEMPLATE,
+    # doc_generation / decision_capture / risk_scan
     # fall back to morning_brief until specialized templates are written.
 }
 
 SYNTHESIZE_TEMPLATES: dict[str, str] = {
     "morning_brief": MORNING_BRIEF_SYNTHESIZE_TEMPLATE,
     "code_review": CODE_REVIEW_SYNTHESIZE_TEMPLATE,
+    "test_generation": TEST_GENERATION_SYNTHESIZE_TEMPLATE,
 }
 
 
@@ -324,6 +417,8 @@ __all__ = [
     "MORNING_BRIEF_SYNTHESIZE_TEMPLATE",
     "CODE_REVIEW_EXTRACT_TEMPLATE",
     "CODE_REVIEW_SYNTHESIZE_TEMPLATE",
+    "TEST_GENERATION_EXTRACT_TEMPLATE",
+    "TEST_GENERATION_SYNTHESIZE_TEMPLATE",
     "format_extract_prompt",
     "format_synthesize_prompt",
 ]
