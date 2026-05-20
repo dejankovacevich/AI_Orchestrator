@@ -437,6 +437,17 @@ Scaffolded:
 - semantic memory indexing workflow
 - Claude review path after policy gates
 
+## Contributing
+
+PRs welcome. Quick on-ramp:
+
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md) — short, practical, lists what makes a good PR.
+2. Skim [ROADMAP.md](ROADMAP.md) or the [`good-first-issue`](https://github.com/dejansaudi/AI_Orchestrator/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue) tag for starter work.
+3. Run `bash scripts/run_tests.sh` locally before opening the PR.
+4. Open a [GitHub Discussion](https://github.com/dejansaudi/AI_Orchestrator/discussions) for anything bigger than a single concept.
+
+The project is intentionally private-first. Safety defaults (no cloud without explicit gates, no external writes, day-mode model-loading lock, fail-closed everywhere) are part of the intent, not friction. Please keep them.
+
 ## License
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for full text.
@@ -448,4 +459,4 @@ Copyright (c) 2026 Dejan K.
 - **Author:** Dejan K.
 - **Contact:** dejansaudi@gmail.com
 
-Issues and pull requests welcome via the GitHub repository. Note that this is a private-by-design tool — if you fork it, the safety defaults (no cloud calls without explicit gates, no external writes, day-mode model-loading lock) are part of the intent, not the friction. Please keep them.
+Issues, PRs, and design Discussions all welcome via the GitHub repository.

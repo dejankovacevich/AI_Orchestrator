@@ -1,0 +1,84 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+    name: Shell syntax
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n every script
+        run: |
+          set -e
+          for f in scripts/*.sh; do
+            bash -n "$f"
+            echo "  ok: $f"
+          done
+
+  python-tests:
+    runs-on: ubuntu-latest
+    name: Python compile + pytest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install the dependencies declared in pyproject.toml plus
+          # the build-tooling we use (reportlab for PDFs, pypdf to
+          # validate them in tests).
+          pip install \
+            temporalio langgraph langchain langchain-ollama litellm \
+            pydantic pandas pyyaml python-dotenv 'psycopg[binary]' \
+            sqlalchemy chromadb streamlit requests rich loguru pytest \
+            reportlab pypdf
+      - name: Python compile sweep
+        shell: python {0}
+        run: |
+          from pathlib import Path
+          import py_compile, sys
+          failed = []
+          for path in sorted(Path('.').rglob('*.py')):
+              if '.venv' in path.parts or '.git' in path.parts:
+                  continue
+              try:
+                  py_compile.compile(str(path), doraise=True)
+              except py_compile.PyCompileError as exc:
+                  failed.append((path, exc))
+          if failed:
+              for path, exc in failed:
+                  print(f"FAIL: {path}\n{exc}")
+              sys.exit(1)
+          print("Python compilation passed")
+      - name: pytest
+        run: python -m pytest -q
+      - name: Build PDFs (smoke test)
+        run: |
+          python scripts/build_pdfs.py
+          python -c "
+          from pypdf import PdfReader
+          for p in [
+              'docs/Local_AI_Orchestrator_System_Guide.pdf',
+              'docs/Local_AI_Orchestrator_Onboarding.pdf',
+              'docs/Local_AI_Orchestrator_Technical_Reference.pdf',
+          ]:
+              n = len(PdfReader(p).pages)
+              assert n > 5, f'{p} only has {n} pages, expected > 5'
+              print(f'{p}: {n} pages')
+          "
+
+  docker-compose:
+    runs-on: ubuntu-latest
+    name: docker compose config
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose config
+        run: docker compose config > /dev/null && echo "compose ok"
