@@ -27,6 +27,7 @@ from assistant_core.execution.prompts import (
     EXTRACT_TEMPLATES,
     MORNING_BRIEF_EXTRACT_TEMPLATE,
     SYNTHESIZE_TEMPLATES,
+    TEST_GENERATION_EXTRACT_TEMPLATE,
     format_extract_prompt,
     format_synthesize_prompt,
 )
@@ -147,6 +148,17 @@ def test_extract_prompt_uses_code_review_template_for_code_review_packet(tmp_pat
     assert "Stay within the file's existing dependency set" in prompt
 
 
+def test_extract_prompt_uses_test_generation_template_for_test_generation_packet(tmp_path):
+    ctx = _ctx(tmp_path, task_type="test_generation")
+    prompt = format_extract_prompt(
+        packet=ctx.packet, source_path="payments.py", kind="py", content="def pay(): ..."
+    )
+    assert "Missing test cases" in prompt
+    assert "Edge cases to cover" in prompt
+    assert "Test scaffolding suggestions" in prompt
+    assert "Stay within the file's existing dependency set" in prompt
+
+
 def test_unknown_task_type_falls_back_to_morning_brief(tmp_path):
     # Bypass pydantic literal check by using model_construct
     ctx = _ctx(tmp_path)
@@ -172,8 +184,10 @@ def test_synthesize_prompt_uses_code_review_template_for_code_review_packet(tmp_
 def test_template_registry_includes_required_keys():
     assert "morning_brief" in EXTRACT_TEMPLATES
     assert "code_review" in EXTRACT_TEMPLATES
+    assert "test_generation" in EXTRACT_TEMPLATES
     assert "morning_brief" in SYNTHESIZE_TEMPLATES
     assert "code_review" in SYNTHESIZE_TEMPLATES
+    assert "test_generation" in SYNTHESIZE_TEMPLATES
 
 
 # ---------------------------------------------------------------------------
