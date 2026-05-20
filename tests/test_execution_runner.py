@@ -201,7 +201,7 @@ def test_failing_primary_model_marks_partial_failure(tmp_path, inbox_with_one_no
     assert result.status == "PARTIAL_FAILURE"
     assert result.files_failed == 1
     assert result.files_processed == 0
-    assert any("primary model failed" in (rec.error or "") for rec in result.file_records)
+    assert any("model failed" in (rec.error or "") for rec in result.file_records)
 
 
 def test_synthesis_failure_falls_back_to_deterministic_concat(tmp_path, inbox_with_one_note):

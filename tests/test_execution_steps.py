@@ -259,10 +259,11 @@ def test_write_outputs_creates_expected_files(tmp_path):
     out = ctx.output_dir
     assert (out / "00_STATUS.json").exists()
     assert (out / "01_MORNING_BRIEF.md").exists()
+    assert (out / "08_CLOUD_REVIEW_CANDIDATES.md").exists()
     assert (out / "09_AUDIT_LOG.md").exists()
     assert len(list((out / "_extractions").glob("*.md"))) == 1
-    # Artifact count: 1 status + 1 brief + 1 audit + 1 extraction
-    assert ctx.result.artifacts_written == 4
+    # Artifact count: status + brief + audit + cloud-candidates + extraction
+    assert ctx.result.artifacts_written == 5
 
 
 # ---------------------------------------------------------------------------
@@ -290,15 +291,169 @@ def test_finalize_run_sets_partial_failure_when_any_file_failed(tmp_path):
 # Scaffolded steps are no-ops today
 # ---------------------------------------------------------------------------
 
-def test_cloud_review_gate_is_a_noop(tmp_path):
-    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
-    before = ctx.result.model_dump()
-    steps.cloud_review_gate(ctx)
-    assert ctx.result.model_dump() == before
-
-
 def test_archive_processed_files_is_a_noop(tmp_path):
     ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
     before = ctx.result.model_dump()
     steps.archive_processed_files(ctx)
     assert ctx.result.model_dump() == before
+
+
+# ---------------------------------------------------------------------------
+# File classifier
+# ---------------------------------------------------------------------------
+
+def test_classify_task_routes_code_to_local_coder():
+    task, group = steps._classify_task({"path": "/x/y/foo.py"})
+    assert task == "coding"
+    assert group == steps.CODER_GROUP
+
+
+def test_classify_task_routes_markdown_to_local_main():
+    task, group = steps._classify_task({"path": "/x/y/notes.md"})
+    assert task == "general"
+    assert group == steps.PRIMARY_GROUP
+
+
+def test_classify_task_handles_many_code_extensions():
+    for suffix in (".ts", ".tsx", ".go", ".rs", ".java", ".rb", ".swift"):
+        task, group = steps._classify_task({"path": f"/x/y/foo{suffix}"})
+        assert task == "coding", f"failed for {suffix}"
+        assert group == steps.CODER_GROUP
+
+
+# ---------------------------------------------------------------------------
+# Secondary retry chain
+# ---------------------------------------------------------------------------
+
+def test_secondary_retries_when_primary_evaluator_fails(tmp_path, monkeypatch):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "note.md").write_text("a meaningful note", encoding="utf-8")
+
+    calls = []
+
+    def backend(group, prompt, mode_, override):
+        calls.append(group)
+        if group == steps.PRIMARY_GROUP:
+            # Primary returns junk that fails the evaluator
+            return "no useful structure here"
+        # Secondary returns content with the required terms so eval passes
+        return (
+            "## Priorities\n- one\n"
+            "## Decisions needed\n- d\n"
+            "## Risks / Blockers\n- r\n"
+        )
+
+    ctx = _make_ctx(tmp_path, source_paths=[inbox], backend=backend)
+    steps.scan_sources(ctx)
+    steps.process_sources(ctx)
+
+    assert ctx.result.files_processed == 1
+    rec = ctx.result.file_records[0]
+    assert rec.retry_attempted is True
+    assert rec.retry_succeeded is True
+    assert rec.needs_cloud_review is False
+    assert rec.evaluation_passed is True
+    assert calls == [steps.PRIMARY_GROUP, steps.SECONDARY_GROUP]
+
+
+def test_both_local_attempts_failing_flags_needs_cloud_review(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "note.md").write_text("content", encoding="utf-8")
+
+    def junk_backend(group, prompt, mode_, override):
+        return "blah blah no required terms"  # always fails evaluator
+
+    ctx = _make_ctx(tmp_path, source_paths=[inbox], backend=junk_backend)
+    steps.scan_sources(ctx)
+    steps.process_sources(ctx)
+
+    rec = ctx.result.file_records[0]
+    assert rec.retry_attempted is True
+    assert rec.retry_succeeded is False
+    assert rec.needs_cloud_review is True
+
+
+# ---------------------------------------------------------------------------
+# cloud_review_gate
+# ---------------------------------------------------------------------------
+
+def test_cloud_review_gate_no_candidates_is_noop(tmp_path):
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    steps.cloud_review_gate(ctx)
+    assert ctx.result.cloud_candidates == []
+    assert ctx.result.cloud_candidates_logged == 0
+
+
+def test_cloud_review_gate_blocks_when_fallback_disabled(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    rec = FileExecutionRecord(file_path="/some/file.md", needs_cloud_review=True)
+    ctx.result.file_records.append(rec)
+
+    steps.cloud_review_gate(ctx)
+
+    assert len(ctx.result.cloud_candidates) == 1
+    c = ctx.result.cloud_candidates[0]
+    assert c.gate_passed is False
+    assert "disabled" in (c.gate_block_reason or "")
+    assert c.escalated is False
+    assert ctx.result.cloud_calls_made == 0
+
+
+def test_cloud_review_gate_blocks_when_file_outside_cloud_review_dir(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    # Flip the per-packet cloud allowance + cfg flag so we hit the path-gate
+    ctx.cfg.cloud_fallback_enabled = True
+    ctx.packet.cloud_policy = {"allowed": True, "explicit": True}
+    ctx.packet.high_stakes = True
+    rec = FileExecutionRecord(file_path="/random/path/file.md", needs_cloud_review=True)
+    ctx.result.file_records.append(rec)
+
+    steps.cloud_review_gate(ctx)
+
+    c = ctx.result.cloud_candidates[0]
+    assert c.gate_passed is False
+    assert "cloud_review" in (c.gate_block_reason or "") or "cloud" in (c.gate_block_reason or "")
+    assert c.escalated is False
+
+
+def test_cloud_candidates_file_is_written_even_when_empty(tmp_path):
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    ctx.brief_md = "# Morning Brief\n"
+    ctx.extractions = []
+    steps.write_outputs(ctx)
+    out = ctx.output_dir
+    candidates_file = out / "08_CLOUD_REVIEW_CANDIDATES.md"
+    assert candidates_file.exists()
+    text = candidates_file.read_text(encoding="utf-8")
+    assert "No files were flagged" in text
+
+
+def test_cloud_candidates_file_lists_flagged_records(tmp_path):
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    ctx.brief_md = "# Morning Brief\n"
+    ctx.extractions = []
+    # Manually populate as if cloud_review_gate had run
+    from assistant_core.schemas import CloudCandidate
+
+    ctx.result.cloud_candidates = [
+        CloudCandidate(
+            file_path="/x/y/notes.md",
+            reason="primary and secondary local extractions failed the evaluator",
+            primary_model_group="local-main",
+            secondary_model_group="local-secondary",
+            gate_passed=False,
+            gate_block_reason="Cloud fallback is disabled by configuration.",
+            escalated=False,
+        )
+    ]
+    steps.write_outputs(ctx)
+    text = (ctx.output_dir / "08_CLOUD_REVIEW_CANDIDATES.md").read_text(encoding="utf-8")
+    assert "/x/y/notes.md" in text
+    assert "BLOCKED" in text
+    assert "Cloud fallback is disabled" in text

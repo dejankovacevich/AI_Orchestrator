@@ -45,9 +45,14 @@ from assistant_core.llm import ollama_admin
 from assistant_core.memory.memory_extractor import extract_memory_candidates
 from assistant_core.memory.obsidian import write_daily_brief, write_memory_candidate
 from assistant_core.paths import resolve_user_path
-from assistant_core.safety import SafetyError, assert_heavy_execution_allowed
+from assistant_core.safety import (
+    SafetyError,
+    assert_cloud_allowed,
+    assert_heavy_execution_allowed,
+)
 from assistant_core.schemas import (
     Artifact,
+    CloudCandidate,
     FileExecutionRecord,
     MemoryCandidate,
     ModelCallLog,
@@ -64,6 +69,23 @@ REASONER_GROUP = "local-reasoner"
 CODER_GROUP = "local-coder"
 EVAL_REQUIRED_TERMS = ["priorities", "decisions", "risks"]
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".csv", ".json", ".log"}
+
+# File extensions that should route to the coder model instead of local-main.
+# When the panel's Models tab lets the user pull qwen3-coder, code work goes
+# there automatically. If qwen3-coder isn't pulled, the secondary retry chain
+# still catches quality issues.
+CODE_EXTENSIONS = frozenset(
+    {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java",
+     ".cpp", ".cxx", ".cc", ".c", ".h", ".hpp", ".rb", ".swift", ".kt",
+     ".scala", ".php", ".sql", ".sh", ".bash"}
+)
+
+# Tasks that map to which model group for the primary attempt.
+TASK_TO_PRIMARY_GROUP = {
+    "general": PRIMARY_GROUP,
+    "coding": CODER_GROUP,
+    "reasoning": REASONER_GROUP,
+}
 
 
 # =============================================================================
@@ -170,10 +192,82 @@ def process_sources(ctx: StepContext) -> StepContext:
 
 
 def cloud_review_gate(ctx: StepContext) -> StepContext:
-    """Scaffolded. Will inspect extractions for cloud-review candidates and
-    call ``assert_cloud_allowed`` before any Claude invocation. Today a no-op:
-    no cloud calls are wired anywhere in the pipeline."""
+    """Catalog files that local execution flagged for cloud review.
+
+    For each record with ``needs_cloud_review=True``:
+      1. Run it through ``assert_cloud_allowed`` with the current config.
+      2. Record a CloudCandidate on ``ctx.result.cloud_candidates`` capturing
+         the gate's verdict (allowed / blocked-with-reason).
+      3. When the gate allows it AND a cloud caller is wired, escalate.
+         Today no cloud caller is wired (deliberate default-off), so we
+         set ``escalated=False`` and 0 cost, and let the user wire the
+         actual call later by setting cloud_fallback_enabled + key + budget.
+
+    The 08_CLOUD_REVIEW_CANDIDATES.md output is written from the candidates
+    list during ``write_outputs`` so the user can see what would have
+    escalated without enabling any cloud spend.
+    """
+    flagged = [r for r in ctx.result.file_records if r.needs_cloud_review]
+    if not flagged:
+        return ctx
+
+    cfg = ctx.cfg
+    cloud_review_dir = cfg.inbox_dir / "cloud_review"
+
+    for record in flagged:
+        candidate = CloudCandidate(
+            file_path=record.file_path,
+            reason="primary and secondary local extractions failed the evaluator",
+            primary_model_group=record.primary_model_group,
+            secondary_model_group=record.secondary_model_group,
+        )
+
+        block_reason: str | None = None
+        try:
+            assert_cloud_allowed(
+                file_path=record.file_path,
+                cloud_fallback_enabled=cfg.cloud_fallback_enabled,
+                work_packet_cloud_allowed=bool(
+                    ctx.packet.cloud_policy.get("allowed", False)
+                ),
+                high_stakes=ctx.packet.high_stakes,
+                local_quality_gate_failed=True,
+                anthropic_api_key=_anthropic_key_present(),
+                daily_budget_remaining=True,
+                cloud_review_dir=cloud_review_dir,
+            )
+            candidate.gate_passed = True
+        except SafetyError as exc:
+            block_reason = str(exc)
+            candidate.gate_passed = False
+            candidate.gate_block_reason = block_reason
+
+        # When the gate passes, escalation is policy-allowed. The actual HTTP
+        # call to Claude is left for a follow-up commit (no caller wired yet)
+        # so this default-off path never spends a token.
+        if candidate.gate_passed:
+            # Caller wiring lives here later. For now: mark we'd have called.
+            candidate.escalated = False
+            candidate.cloud_response_chars = 0
+            candidate.estimated_cost_usd = None
+
+        ctx.result.cloud_candidates.append(candidate)
+
+    ctx.result.cloud_candidates_logged = len(ctx.result.cloud_candidates)
+    ctx.result.cloud_calls_made = sum(
+        1 for c in ctx.result.cloud_candidates if c.escalated
+    )
     return ctx
+
+
+def _anthropic_key_present() -> str | None:
+    """Return ANTHROPIC_API_KEY if set (any value), else None.
+
+    Pulled out so tests can monkeypatch via os.environ.
+    """
+    import os
+
+    return os.environ.get("ANTHROPIC_API_KEY") or None
 
 
 def synthesize_brief(ctx: StepContext) -> StepContext:
@@ -262,6 +356,11 @@ def write_outputs(ctx: StepContext) -> StepContext:
     audit_path.write_text("\n".join(audit_lines) + "\n", encoding="utf-8")
     _record_artifact(ctx, audit_path, artifact_type="audit_log")
 
+    # 08_CLOUD_REVIEW_CANDIDATES.md (always written so the user can see
+    # what local execution couldn't handle, regardless of whether cloud
+    # was enabled this run).
+    _write_cloud_candidates_file(ctx, output_dir)
+
     # Per-file extraction dumps for debugging / reproducibility
     extracts_dir = output_dir / "_extractions"
     extracts_dir.mkdir(parents=True, exist_ok=True)
@@ -272,6 +371,57 @@ def write_outputs(ctx: StepContext) -> StepContext:
         _record_artifact(ctx, target, artifact_type="extraction")
 
     return ctx
+
+
+def _write_cloud_candidates_file(ctx: StepContext, output_dir: Path) -> None:
+    """Render the cloud-review catalog as Markdown.
+
+    The file is always written; an empty candidates list produces an
+    explicit "(none)" entry. This lets you grep your output history for
+    when cloud was ever considered.
+    """
+    candidates = ctx.result.cloud_candidates
+    lines = [
+        "# Cloud Review Candidates",
+        "",
+        f"Work packet: {ctx.packet.id}",
+        f"Title: {ctx.packet.title}",
+        "",
+    ]
+    if not candidates:
+        lines.append("No files were flagged for cloud review in this run.")
+    else:
+        lines.append(
+            f"{len(candidates)} file(s) flagged. "
+            f"{sum(1 for c in candidates if c.gate_passed)} passed the safety gate; "
+            f"{sum(1 for c in candidates if c.escalated)} actually called cloud."
+        )
+        lines.append("")
+        for candidate in candidates:
+            lines.append(f"## `{candidate.file_path}`")
+            lines.append(f"- Reason: {candidate.reason}")
+            lines.append(f"- Tried locally: {candidate.primary_model_group}"
+                         + (f" -> {candidate.secondary_model_group}"
+                            if candidate.secondary_model_group else ""))
+            lines.append(
+                f"- Safety gate: {'PASSED' if candidate.gate_passed else 'BLOCKED'}"
+            )
+            if candidate.gate_block_reason:
+                lines.append(f"- Block reason: {candidate.gate_block_reason}")
+            lines.append(
+                f"- Escalated to cloud: {'yes' if candidate.escalated else 'no'}"
+            )
+            if candidate.escalated:
+                lines.append(f"- Cloud response chars: {candidate.cloud_response_chars}")
+                if candidate.estimated_cost_usd is not None:
+                    lines.append(
+                        f"- Estimated cost: ${candidate.estimated_cost_usd:.4f}"
+                    )
+            lines.append("")
+
+    target = output_dir / "08_CLOUD_REVIEW_CANDIDATES.md"
+    target.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    _record_artifact(ctx, target, artifact_type="cloud_review_candidates")
 
 
 def write_obsidian(ctx: StepContext) -> StepContext:
@@ -337,12 +487,7 @@ def _process_one_source(
     ctx: StepContext, source_path: str
 ) -> tuple[FileExecutionRecord, str | None]:
     """Run the per-source sub-pipeline for one file. Returns (record, extraction)."""
-    record = FileExecutionRecord(
-        file_path=source_path,
-        classified_as="general",
-        primary_model_group=PRIMARY_GROUP,
-        primary_model_tag=_tag_for_group(PRIMARY_GROUP),
-    )
+    record = FileExecutionRecord(file_path=source_path)
 
     # --- load_file -----------------------------------------------------
     try:
@@ -358,9 +503,10 @@ def _process_one_source(
         return record, None
 
     # --- classify_file_task -------------------------------------------
-    # v1: everything classified as "general" -> local-main.
-    # Future hook for: code -> local-coder, transcripts -> local-reasoner, etc.
-    record.classified_as = _classify_task(loaded)
+    task_type, primary_group = _classify_task(loaded)
+    record.classified_as = task_type
+    record.primary_model_group = primary_group
+    record.primary_model_tag = _tag_for_group(primary_group)
 
     kind = loaded.get("kind", "unknown")
     content = loaded.get("content") or _format_csv_preview(loaded)
@@ -380,72 +526,121 @@ def _process_one_source(
             f"{ctx.cfg.max_chars_per_chunk} chars; only the first is shown here.]"
         )
 
-    # --- execute_primary_local ---------------------------------------
+    # --- execute_primary_local + evaluate ----------------------------
     prompt = format_extract_prompt(
         packet=ctx.packet,
         source_path=source_path,
         kind=kind,
         content=primary_content,
     )
-    try:
-        response = ctx.backend(PRIMARY_GROUP, prompt, ctx.mode, ctx.manual_override)
-    except SafetyError as exc:
-        record.error = f"safety gate: {exc}"
-        _maybe_log_model_call(
-            ctx,
-            file_path=source_path,
-            task_type="extract",
-            model_group=PRIMARY_GROUP,
-            actual_model=record.primary_model_tag,
-            prompt_chars=len(prompt),
-            response_chars=0,
-            success=False,
-            error=str(exc),
-        )
-        return record, None
-    except Exception as exc:
-        record.error = f"primary model failed: {exc}"
-        _maybe_log_model_call(
-            ctx,
-            file_path=source_path,
-            task_type="extract",
-            model_group=PRIMARY_GROUP,
-            actual_model=record.primary_model_tag,
-            prompt_chars=len(prompt),
-            response_chars=0,
-            success=False,
-            error=str(exc),
-        )
+    primary_response, primary_error = _call_extract(
+        ctx, primary_group, prompt, source_path, record.primary_model_tag
+    )
+    if primary_response is None:
+        record.error = primary_error
         return record, None
 
-    record.chars_out = len(response)
+    record.chars_out = len(primary_response)
+    evaluation = deterministic_completeness_evaluator(
+        primary_response, EVAL_REQUIRED_TERMS
+    )
+    record.evaluation_passed = bool(evaluation.pass_)
+    _maybe_save_evaluation(ctx, evaluation=evaluation, file_path=source_path)
+
+    if record.evaluation_passed:
+        return record, primary_response
+
+    # --- execute_secondary_local_if_needed ---------------------------
+    # Primary output failed the evaluator. Retry on local-secondary (70B)
+    # unless the primary already WAS the secondary group, or budget says no.
+    if (
+        SECONDARY_GROUP != primary_group
+        and ctx.cfg.max_local_attempts >= 2
+    ):
+        record.retry_attempted = True
+        record.secondary_model_group = SECONDARY_GROUP
+        record.secondary_model_tag = _tag_for_group(SECONDARY_GROUP)
+        secondary_response, _ = _call_extract(
+            ctx, SECONDARY_GROUP, prompt, source_path, record.secondary_model_tag
+        )
+        if secondary_response is not None:
+            record.secondary_chars_out = len(secondary_response)
+            sec_eval = deterministic_completeness_evaluator(
+                secondary_response, EVAL_REQUIRED_TERMS
+            )
+            _maybe_save_evaluation(
+                ctx, evaluation=sec_eval, file_path=source_path
+            )
+            if sec_eval.pass_:
+                record.retry_succeeded = True
+                record.evaluation_passed = True
+                return record, secondary_response
+            # Secondary also failed; we still prefer its output as the
+            # extraction (more capable model), and mark cloud-review.
+            record.needs_cloud_review = True
+            return record, secondary_response
+
+    # Either secondary was skipped (budget/policy) or it didn't produce a
+    # response. Flag for cloud review and return the primary output.
+    record.needs_cloud_review = True
+    return record, primary_response
+
+
+def _call_extract(
+    ctx: StepContext,
+    model_group: str,
+    prompt: str,
+    source_path: str,
+    actual_tag: str | None,
+) -> tuple[str | None, str | None]:
+    """Single extraction call against ``model_group``.
+
+    Returns ``(response_or_None, error_or_None)``. Logs the model call to
+    Postgres on both success and failure. Pulled out of _process_one_source
+    so primary and secondary attempts share exactly one path.
+    """
+    try:
+        response = ctx.backend(model_group, prompt, ctx.mode, ctx.manual_override)
+    except SafetyError as exc:
+        _maybe_log_model_call(
+            ctx,
+            file_path=source_path,
+            task_type="extract",
+            model_group=model_group,
+            actual_model=actual_tag,
+            prompt_chars=len(prompt),
+            response_chars=0,
+            success=False,
+            error=str(exc),
+        )
+        return None, f"safety gate ({model_group}): {exc}"
+    except Exception as exc:
+        _maybe_log_model_call(
+            ctx,
+            file_path=source_path,
+            task_type="extract",
+            model_group=model_group,
+            actual_model=actual_tag,
+            prompt_chars=len(prompt),
+            response_chars=0,
+            success=False,
+            error=str(exc),
+        )
+        return None, f"{model_group} model failed: {exc}"
+
     ctx.result.model_calls += 1
     _maybe_log_model_call(
         ctx,
         file_path=source_path,
         task_type="extract",
-        model_group=PRIMARY_GROUP,
-        actual_model=record.primary_model_tag,
+        model_group=model_group,
+        actual_model=actual_tag,
         prompt_chars=len(prompt),
         response_chars=len(response),
         success=True,
         error=None,
     )
-
-    # --- evaluate_primary --------------------------------------------
-    evaluation = deterministic_completeness_evaluator(response, EVAL_REQUIRED_TERMS)
-    record.evaluation_passed = bool(evaluation.pass_)
-    _maybe_save_evaluation(ctx, evaluation=evaluation, file_path=source_path)
-
-    # --- execute_secondary_local_if_needed (scaffold) ----------------
-    # Future: when not record.evaluation_passed, retry on local-secondary
-    # (qwen3 70B) and re-evaluate. Today: skipped.
-
-    # --- reasoning_check_if_needed (scaffold) ------------------------
-    # Future: when actionability_score is low, call local-reasoner for a
-    # cross-check. Today: skipped.
-
-    return record, response
+    return response, None
 
 
 # =============================================================================
@@ -453,12 +648,20 @@ def _process_one_source(
 # =============================================================================
 
 
-def _classify_task(loaded: dict[str, Any]) -> str:
-    """v1 classifier: route by file extension hint. Most things stay 'general'."""
+def _classify_task(loaded: dict[str, Any]) -> tuple[str, str]:
+    """Return (task_type, primary_model_group) for a loaded source file.
+
+    Today's heuristics:
+      - any code file extension -> ('coding', local-coder)
+      - everything else -> ('general', local-main)
+
+    Future: inspect content for reasoning-heavy patterns (multi-hop
+    questions, contradiction analysis) and route to local-reasoner.
+    """
     suffix = Path(loaded.get("path", "")).suffix.lower()
-    if suffix in {".py", ".ts", ".tsx", ".js", ".go", ".rs", ".java"}:
-        return "coding"  # local-coder when classifier wires up
-    return "general"
+    if suffix in CODE_EXTENSIONS:
+        return "coding", CODER_GROUP
+    return "general", PRIMARY_GROUP
 
 
 def _maybe_add_source(out: list[str], seen: set[str], path: Path) -> None:

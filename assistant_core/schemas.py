@@ -162,7 +162,32 @@ class FileExecutionRecord(BaseModel):
     retry_attempted: bool = False
     retry_succeeded: bool = False
     secondary_model_group: str | None = None
+    secondary_model_tag: str | None = None
+    secondary_chars_out: int = 0
+    needs_cloud_review: bool = False
+    escalated_to_cloud: bool = False
+    cloud_response_chars: int = 0
     error: str | None = None
+
+
+class CloudCandidate(BaseModel):
+    """One row in the cloud review catalog (rendered to 08_CLOUD_REVIEW_CANDIDATES.md).
+
+    A candidate is a per-file decision: local extraction failed both primary
+    and secondary, so the file could benefit from cloud (Claude) review. The
+    candidate captures whether the safety + budget gates allowed escalation,
+    and whether we actually called cloud.
+    """
+
+    file_path: str
+    reason: str
+    primary_model_group: str = "local-main"
+    secondary_model_group: str | None = None
+    gate_passed: bool = False
+    gate_block_reason: str | None = None
+    escalated: bool = False
+    cloud_response_chars: int = 0
+    estimated_cost_usd: float | None = None
 
 
 class ExecutionResult(BaseModel):
@@ -179,7 +204,10 @@ class ExecutionResult(BaseModel):
     model_calls: int = 0
     artifacts_written: int = 0
     memory_candidates: int = 0
+    cloud_candidates_logged: int = 0
+    cloud_calls_made: int = 0
     file_records: list[FileExecutionRecord] = Field(default_factory=list)
+    cloud_candidates: list[CloudCandidate] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     started_at: datetime = Field(default_factory=utc_now)
     completed_at: datetime | None = None
