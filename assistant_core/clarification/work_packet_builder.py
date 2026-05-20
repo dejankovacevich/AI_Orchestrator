@@ -19,17 +19,77 @@ STANDARD_OUTPUTS = [
 ]
 
 
+def detect_task_type(text: str) -> str:
+    """Heuristic classifier from request text to a TaskType literal.
+
+    Order matters: more specific patterns first. Falls back to morning_brief
+    for ambiguous or pure-summary requests.
+    """
+    lower = text.lower()
+    # Code-shaped intents
+    if any(t in lower for t in (
+        "code review", "review this code", "review the code", "review my code",
+        "refactor", "clarity issues", "code quality",
+    )):
+        return "code_review"
+    if any(t in lower for t in (
+        "tests for", "test cases", "missing tests", "generate tests",
+        "write tests", "unit test",
+    )):
+        return "test_generation"
+    if any(t in lower for t in (
+        "documentation", "docstring", "doc string", "readme", "generate docs",
+    )):
+        return "doc_generation"
+    # Knowledge-shaped intents
+    if any(t in lower for t in (
+        "decision", "decisions made", "decisions needed", "action items",
+        "owners", "transcripts",
+    )):
+        return "decision_capture"
+    if any(t in lower for t in (
+        "risk", "blocker", "risks and blockers", "risk scan",
+    )):
+        return "risk_scan"
+    # Default: morning brief
+    return "morning_brief"
+
+
+def _outputs_for_task(task_type: str) -> list[str]:
+    """Default desired_outputs list per task type. Editable by clarification answers."""
+    return {
+        "morning_brief": [
+            "01_MORNING_BRIEF.md",
+            "02_TODAY_PRIORITIES.md",
+            "05_RISKS_AND_BLOCKERS.md",
+        ],
+        "code_review": ["01_CODE_REVIEW.md"],
+        "test_generation": ["01_PROPOSED_TESTS.md"],
+        "doc_generation": ["01_GENERATED_DOCS.md"],
+        "decision_capture": ["01_DECISIONS.md", "03_ACTIONS_BY_PERSON.md"],
+        "risk_scan": ["05_RISKS_AND_BLOCKERS.md"],
+    }.get(task_type, [])
+
+
 def build_initial_work_packet(title: str, description: str) -> WorkPacket:
-    lower = f"{title}\n{description}".lower()
-    desired_outputs: list[str] = []
-    if "morning" in lower or "tomorrow" in lower or "brief" in lower:
-        desired_outputs = ["01_MORNING_BRIEF.md", "02_TODAY_PRIORITIES.md", "05_RISKS_AND_BLOCKERS.md"]
+    blob = f"{title}\n{description}"
+    lower = blob.lower()
+    task_type = detect_task_type(blob)
+    desired_outputs = _outputs_for_task(task_type)
+    # Researchers / regulated work explicitly mention citation/grounding;
+    # detect that and pre-flip the flag so the evaluator enforces sources.
+    grounding_required = any(t in lower for t in (
+        "citation", "cite source", "every claim", "grounding",
+        "must cite", "with sources", "regulated", "auditable",
+    ))
 
     high_stakes = any(term in lower for term in ["board", "ceo", "legal", "investor", "high-stakes", "high stakes"])
     return WorkPacket(
         title=title,
         objective=description.strip() or None,
         raw_user_request=description,
+        task_type=task_type,
+        grounding_required=grounding_required,
         high_stakes=high_stakes,
         desired_outputs=desired_outputs,
         execution_plan=ExecutionPlan(

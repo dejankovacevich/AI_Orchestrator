@@ -44,6 +44,8 @@ def build_onboarding(styles) -> list:
         "10. Recipe: decision capture from transcripts",
         "11. Recipe: risk and blocker surfacing",
         "12. Recipe: code task using qwen3-coder",
+        "12a. Recipe: one-shot code review (indie hacker fast path)",
+        "12b. Recipe: audit export for a single packet (researcher / regulated)",
         "13. Sample answer files for every recipe",
         "14. Do / Don't",
         "15. Memory budgeting (what to load when)",
@@ -530,6 +532,99 @@ def build_onboarding(styles) -> list:
             "Until that's wired, you can manually load <code>qwen3-coder:30b</code> in the "
             "Models tab and quick-test prompt the review."
         ),
+        PageBreak(),
+    ]
+
+    # --- Recipe: one-shot code review (indie hacker fast path) ----------
+    story += [
+        p(styles, "H1", "12a. Recipe: one-shot code review (indie hacker fast path)"),
+        p(
+            styles,
+            "Body",
+            "When you want a code review without manually creating a packet + "
+            "answer file, the wrapper script does it in one command. It auto-sets "
+            "<code>task_type=code_review</code>, fills sensible default answers, "
+            "and runs the executor synchronously with <code>--manual-override</code> "
+            "so it works during the day even with strict policy.",
+        ),
+        p(styles, "H2", "Command"),
+        code_block(
+            styles,
+            "bash scripts/review_code.sh path/to/file.py\n"
+            "# or with explicit title + ask:\n"
+            'bash scripts/review_code.sh path/to/file.py \\\n'
+            '   "Payments module review" \\\n'
+            '   "Focus on testability and error paths."',
+        ),
+        p(styles, "H2", "What lands where"),
+        *bullets(
+            styles,
+            [
+                "<code>~/LocalAI/output/&lt;date&gt;/01_CODE_REVIEW.md</code> &mdash; the review",
+                "<code>~/Obsidian/LocalAI-ChiefOfStaff/02_Work_Packets/&lt;date&gt;-code_review-&lt;id&gt;.md</code> &mdash; vault copy",
+                "<code>09_AUDIT_LOG.md</code>, <code>08_CLOUD_REVIEW_CANDIDATES.md</code>, per-file extractions next to the review",
+            ],
+        ),
+        p(styles, "H2", "Routing"),
+        p(
+            styles,
+            "Body",
+            "Code files automatically route to <code>local-coder</code> (qwen3-coder:30b) "
+            "when it's pulled. If the evaluator says the primary output is weak the "
+            "secondary retry kicks in (llama3.3:70b). Anything still failing after that "
+            "is logged in <code>08_CLOUD_REVIEW_CANDIDATES.md</code> with the safety gate "
+            "verdict &mdash; cloud calls stay default-off.",
+        ),
+        PageBreak(),
+    ]
+
+    # --- Recipe: audit export (researcher / regulated / IP) -------------
+    story += [
+        p(styles, "H1", "12b. Recipe: audit export for a single packet"),
+        p(
+            styles,
+            "Body",
+            "Researcher / regulated / proprietary-IP workflow. After a run "
+            "completes, dump everything Postgres recorded about that packet into "
+            "one self-contained JSON file you can hand to a reviewer.",
+        ),
+        p(styles, "H2", "Command"),
+        code_block(
+            styles,
+            "bash scripts/export_audit.sh &lt;packet-id&gt;\n"
+            "# or specify an output path:\n"
+            "bash scripts/export_audit.sh &lt;packet-id&gt; ~/audits/2026-Q2-packet.json",
+        ),
+        p(styles, "H2", "What's in the file"),
+        *bullets(
+            styles,
+            [
+                "the <code>work_packets</code> row (title, status, readiness, policies, structured YAML)",
+                "every <code>clarification_questions</code> row across rounds",
+                "every <code>execution_runs</code> row with timing + Temporal workflow id",
+                "every <code>model_calls</code> row (model_group, actual tag, sizes, success)",
+                "every <code>evaluations</code> row (quality, grounding, completeness, recommended next step)",
+                "every <code>artifacts</code> row (file paths + Obsidian copies)",
+                "every <code>memory_candidates</code> row linked to those artifacts",
+            ],
+        ),
+        p(styles, "H2", "Why this matters"),
+        p(
+            styles,
+            "Body",
+            "A reviewer can answer \"which model produced which output, "
+            "evaluated by what, with which inputs, when?\" from one file. "
+            "Combined with the <code>grounding_required=True</code> flag (set "
+            "from the request text or via <code>--grounding-required</code> at "
+            "packet creation), the system enforces \"Source:\" citations in every "
+            "extraction and refuses the run when the evaluator can't find them, "
+            "so the audit trail also includes the model's own provenance claims.",
+        ),
+        p(styles, "Hint",
+          "Combine with <code>cloud_fallback_enabled=false</code> "
+          "(the default) for a guarantee: every byte the model saw, every byte "
+          "it produced, every score the evaluator returned, all stayed on this "
+          "machine. The JSON proves it."),
         PageBreak(),
     ]
 

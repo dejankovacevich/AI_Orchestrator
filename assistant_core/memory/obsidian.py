@@ -36,6 +36,29 @@ def write_work_packet_note(packet: WorkPacket, config: AssistantConfig | None = 
     return target
 
 
+def write_packet_output(
+    packet: WorkPacket,
+    content: str,
+    *,
+    config: AssistantConfig | None = None,
+    day: date | None = None,
+) -> Path:
+    """Write the packet's primary output content into 02_Work_Packets/.
+
+    Used by every task_type except morning_brief (which keeps its dedicated
+    01_Daily_Briefs/ landing pad). Filename pattern:
+        02_Work_Packets/<date>-<task_type>-<packet_id>.md
+    """
+    cfg = config or load_assistant_config()
+    when = (day or packet.created_at.date()).isoformat()
+    filename = f"{when}-{packet.task_type}-{packet.id}.md"
+    target = cfg.obsidian_vault_dir / "02_Work_Packets" / filename
+    assert_within_roots(target, [cfg.obsidian_vault_dir / "02_Work_Packets"])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    return target
+
+
 def write_memory_candidate(candidate: MemoryCandidate, config: AssistantConfig | None = None) -> Path:
     cfg = config or load_assistant_config()
     target = cfg.obsidian_vault_dir / "00_Inbox" / "Memory_Review" / f"{candidate.created_at.date()}-{candidate.id}.md"

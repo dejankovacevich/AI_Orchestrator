@@ -1061,6 +1061,8 @@ def build_technical_reference(styles) -> list:
                 ["create_launchd_plist.sh", "Reads night_mode_start from config/assistant.yaml; emits launchd/com.localai.orchestrator.nightly.plist. With LOCALAI_WRITE_LAUNCHD=true, also installs to ~/Library/LaunchAgents/."],
                 ["day_unlock.sh", "Writes ~/LocalAI/state/day_unlock.flag with timestamp + reason."],
                 ["day_lock.sh", "Removes the flag. Warns if LOCALAI_DAY_UNLOCK is also set in the shell."],
+                ["review_code.sh", "Indie-dev fast path: copy file/dir to inbox, create code_review packet, submit canned answers, run executor synchronously. One command from source file to review markdown."],
+                ["export_audit.sh", "Researcher/regulated fast path: dump the full Postgres audit trail for one packet (work_packets + questions + execution_runs + model_calls + evaluations + artifacts + memory_candidates) into a single reviewer-ready JSON."],
                 ["run_tests.sh", "shellcheck-equivalent (bash -n), py_compile sweep, pytest run, docker compose config validation. The thing CI would run."],
                 ["build_pdfs.py", "Thin entry point. Imports the pdf_builders/ package and renders each document. To add a PDF, write a builder module under scripts/pdf_builders/ and register it in PDFS_TO_BUILD."],
                 ["pdf_builders/ (package)", "One file per PDF document: styles.py, helpers.py, document.py shared; system_guide.py, onboarding.py, technical_reference.py for content. Splitting prevents the old 4000-line monolith."],

@@ -26,6 +26,21 @@ WorkPacketStatus = Literal[
 ]
 
 
+# What kind of work a packet represents. The runner picks the extract +
+# synthesize prompt and the output filename from this. To add a new type:
+#   1. Add the literal here.
+#   2. Add templates in execution/prompts.py (EXTRACT_TEMPLATES / SYNTHESIZE_TEMPLATES).
+#   3. Add an entry in execution/steps.py::TASK_OUTPUT_FILENAMES.
+TaskType = Literal[
+    "morning_brief",
+    "code_review",
+    "test_generation",
+    "doc_generation",
+    "decision_capture",
+    "risk_scan",
+]
+
+
 class ExecutionPlan(BaseModel):
     summary: str = ""
     steps: list[str] = Field(default_factory=list)
@@ -38,6 +53,8 @@ class WorkPacket(BaseModel):
     title: str
     objective: str | None = None
     status: WorkPacketStatus = "DRAFT"
+    task_type: TaskType = "morning_brief"
+    grounding_required: bool = False
     readiness_score: float | None = None
     high_stakes: bool = False
     cloud_policy: dict[str, Any] = Field(default_factory=dict)

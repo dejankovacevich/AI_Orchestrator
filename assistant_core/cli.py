@@ -59,6 +59,12 @@ def cmd_migrate(_: argparse.Namespace) -> int:
 
 def cmd_create_work_packet(args: argparse.Namespace) -> int:
     result = run_deterministic_clarification(args.title, args.description)
+    # Optional explicit overrides for task_type and grounding_required;
+    # the builder auto-detects from keywords by default.
+    if getattr(args, "task_type", None):
+        result.work_packet.task_type = args.task_type
+    if getattr(args, "grounding_required", False):
+        result.work_packet.grounding_required = True
     try:
         create_work_packet(result.work_packet)
         save_questions(result.questions)
@@ -69,6 +75,8 @@ def cmd_create_work_packet(args: argparse.Namespace) -> int:
     _print_json(
         {
             "work_packet_id": result.work_packet.id,
+            "task_type": result.work_packet.task_type,
+            "grounding_required": result.work_packet.grounding_required,
             "status": result.readiness.status,
             "readiness_score": result.readiness.score,
             "questions": [question.model_dump() for question in result.questions],
@@ -194,6 +202,24 @@ def build_parser() -> argparse.ArgumentParser:
     create = sub.add_parser("create-work-packet")
     create.add_argument("title")
     create.add_argument("description")
+    create.add_argument(
+        "--task-type",
+        choices=[
+            "morning_brief",
+            "code_review",
+            "test_generation",
+            "doc_generation",
+            "decision_capture",
+            "risk_scan",
+        ],
+        default=None,
+        help="Override the auto-detected task type.",
+    )
+    create.add_argument(
+        "--grounding-required",
+        action="store_true",
+        help="Force the evaluator to require 'Source:' citations in every extraction.",
+    )
     create.set_defaults(func=cmd_create_work_packet)
 
     clarify = sub.add_parser("run-clarification")

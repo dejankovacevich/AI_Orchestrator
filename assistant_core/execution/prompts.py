@@ -31,9 +31,13 @@ EVALUATOR_PROMPT = (
 )
 
 
-# ---------- Extraction (per source file) ---------------------------------
+# =========================================================================
+# Extraction templates, keyed by task_type
+# =========================================================================
 
-EXTRACT_PROMPT_TEMPLATE = """You are extracting structured signals from one source document for a private work brief.
+# ---------- morning_brief ------------------------------------------------
+
+MORNING_BRIEF_EXTRACT_TEMPLATE = """You are extracting structured signals from one source document for a private work brief.
 
 WORK PACKET CONTEXT
 - Title: {title}
@@ -85,9 +89,7 @@ REQUIRED SECTIONS
 Return only the Markdown above. No preamble, no postscript."""
 
 
-# ---------- Synthesis (all extractions -> morning brief) -----------------
-
-SYNTHESIZE_PROMPT_TEMPLATE = """You are synthesizing a private morning brief from multiple structured per-file extractions.
+MORNING_BRIEF_SYNTHESIZE_TEMPLATE = """You are synthesizing a private morning brief from multiple structured per-file extractions.
 
 WORK PACKET CONTEXT
 - Title: {title}
@@ -145,10 +147,144 @@ OUTPUT FORMAT
 Return only the Markdown above. No preamble."""
 
 
+# ---------- code_review --------------------------------------------------
+
+CODE_REVIEW_EXTRACT_TEMPLATE = """You are reviewing one source code file. Be specific, defensible, and actionable.
+
+WORK PACKET CONTEXT
+- Title: {title}
+- Objective: {objective}
+- Audience: {audience}
+- Quality bar: {quality_threshold}
+- Assumption policy: {assumption_policy}
+- Stop conditions: {escalation_policy}
+
+SOURCE FILE
+- Path: {source_path}
+- Kind: {kind}
+
+SOURCE CONTENT (verbatim; reference line numbers when you make a claim):
+---
+{content}
+---
+
+INSTRUCTIONS
+1. Read the file end-to-end before writing anything.
+2. Each finding must cite specific function names, classes, or line ranges in the source. No vague "improve readability" comments.
+3. If a section has no content, write "(none)" - do not pad.
+4. Stay within the file's existing dependency set; do not propose new libraries.
+5. Label every inference with "Assumption:" prefix.
+
+REQUIRED SECTIONS
+
+## Clarity issues
+- One bullet per issue. Each: <issue>. Where: <function/class/lines>. Why it matters: <one line>. Source: <short quote or line range>.
+
+## Refactor proposal
+- Concrete code changes, each as a small fenced code block with before/after, scoped to <=10 minutes to apply. If none warranted, write "(none)".
+
+## Missing test cases
+- One bullet per test the existing test file (if any) doesn't cover. Each: <case>. Why it matters: <one line>. Outline: <given/when/then>.
+
+## Contract violations or risks
+- API misuse, error paths not handled, resource leaks, race conditions, security smells, etc. With line ranges.
+
+## Open questions for the author
+- Things the reviewer can't answer from the file alone.
+
+## Assumptions made
+- One bullet per inference you made while reviewing. Each prefixed "Assumption:".
+
+Return only the Markdown above. No preamble, no postscript."""
+
+
+CODE_REVIEW_SYNTHESIZE_TEMPLATE = """You are synthesizing a code review across multiple files into a single actionable review document.
+
+WORK PACKET CONTEXT
+- Title: {title}
+- Objective: {objective}
+- Audience: {audience}
+- Quality bar: {quality_threshold}
+- Assumption policy: {assumption_policy}
+- Escalation policy: {escalation_policy}
+- Success criteria: {success_criteria}
+
+PER-FILE EXTRACTIONS (one per source file processed):
+{extractions}
+
+INSTRUCTIONS
+Produce one concise Markdown code review, structured as below.
+- Preserve all line-range and function-name citations from the per-file extractions.
+- Group findings by file. Do not invent issues not present in the extractions.
+- Cap "Top recommended changes" at five items, ordered by impact.
+- Preserve "Assumption:" labels.
+
+OUTPUT FORMAT
+
+# Code Review - {today}
+
+## Top recommended changes (ordered by impact)
+1. <change> (file: <path>, where: <function/lines>)
+2. ...
+
+## Findings by file
+### `<file path>`
+**Clarity issues:** <bullets with line ranges>
+**Refactor proposal:** <bullets or short code blocks>
+**Missing tests:** <bullets>
+**Contract violations / risks:** <bullets with line ranges>
+**Open questions:** <bullets>
+
+(repeat per file)
+
+## Cross-file observations
+<bullets when something spans multiple files; otherwise "(none)">
+
+## Assumptions list
+<flattened from per-file extractions>
+
+## Confidence
+<one-line self-assessment: low / medium / high, with one sentence why>
+
+Return only the Markdown above. No preamble."""
+
+
+# =========================================================================
+# Template registry. Adding a new task type:
+#   1. Add a literal to schemas.TaskType.
+#   2. Add an EXTRACT and SYNTHESIZE template above.
+#   3. Register both below.
+# Until step 2/3 land for a new type, the runner falls back to morning_brief.
+# =========================================================================
+
+EXTRACT_TEMPLATES: dict[str, str] = {
+    "morning_brief": MORNING_BRIEF_EXTRACT_TEMPLATE,
+    "code_review": CODE_REVIEW_EXTRACT_TEMPLATE,
+    # test_generation / doc_generation / decision_capture / risk_scan
+    # fall back to morning_brief until specialized templates are written.
+}
+
+SYNTHESIZE_TEMPLATES: dict[str, str] = {
+    "morning_brief": MORNING_BRIEF_SYNTHESIZE_TEMPLATE,
+    "code_review": CODE_REVIEW_SYNTHESIZE_TEMPLATE,
+}
+
+
+# Backward-compatible aliases (some tests / callers import the old names).
+EXTRACT_PROMPT_TEMPLATE = MORNING_BRIEF_EXTRACT_TEMPLATE
+SYNTHESIZE_PROMPT_TEMPLATE = MORNING_BRIEF_SYNTHESIZE_TEMPLATE
+
+
 # ---------- Helpers ------------------------------------------------------
 
+def _resolve_template(registry: dict[str, str], task_type: str) -> str:
+    """Return the template for ``task_type`` or fall back to morning_brief."""
+    return registry.get(task_type) or registry["morning_brief"]
+
+
 def format_extract_prompt(*, packet, source_path, kind, content):
-    return EXTRACT_PROMPT_TEMPLATE.format(
+    template = _resolve_template(EXTRACT_TEMPLATES, packet.task_type)
+    return template.format(
         title=packet.title or "",
         objective=(packet.objective or "").strip() or "(unspecified)",
         audience=packet.audience or "(unspecified)",
@@ -162,7 +298,8 @@ def format_extract_prompt(*, packet, source_path, kind, content):
 
 
 def format_synthesize_prompt(*, packet, extractions, today):
-    return SYNTHESIZE_PROMPT_TEMPLATE.format(
+    template = _resolve_template(SYNTHESIZE_TEMPLATES, packet.task_type)
+    return template.format(
         title=packet.title or "",
         objective=(packet.objective or "").strip() or "(unspecified)",
         audience=packet.audience or "(unspecified)",
@@ -179,8 +316,14 @@ __all__ = [
     "EXECUTION_SYSTEM_PROMPT",
     "EVALUATOR_SYSTEM_PROMPT",
     "EVALUATOR_PROMPT",
+    "EXTRACT_TEMPLATES",
+    "SYNTHESIZE_TEMPLATES",
     "EXTRACT_PROMPT_TEMPLATE",
     "SYNTHESIZE_PROMPT_TEMPLATE",
+    "MORNING_BRIEF_EXTRACT_TEMPLATE",
+    "MORNING_BRIEF_SYNTHESIZE_TEMPLATE",
+    "CODE_REVIEW_EXTRACT_TEMPLATE",
+    "CODE_REVIEW_SYNTHESIZE_TEMPLATE",
     "format_extract_prompt",
     "format_synthesize_prompt",
 ]

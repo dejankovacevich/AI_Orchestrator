@@ -43,7 +43,11 @@ from assistant_core.execution.prompts import (
 )
 from assistant_core.llm import ollama_admin
 from assistant_core.memory.memory_extractor import extract_memory_candidates
-from assistant_core.memory.obsidian import write_daily_brief, write_memory_candidate
+from assistant_core.memory.obsidian import (
+    write_daily_brief,
+    write_memory_candidate,
+    write_packet_output,
+)
 from assistant_core.paths import resolve_user_path
 from assistant_core.safety import (
     SafetyError,
@@ -85,6 +89,18 @@ TASK_TO_PRIMARY_GROUP = {
     "general": PRIMARY_GROUP,
     "coding": CODER_GROUP,
     "reasoning": REASONER_GROUP,
+}
+
+# Primary output filename per task_type, written into ~/LocalAI/output/<date>/.
+# Fallback for unknown task types is the morning_brief filename so existing
+# integrations don't break.
+TASK_OUTPUT_FILENAMES = {
+    "morning_brief": "01_MORNING_BRIEF.md",
+    "code_review": "01_CODE_REVIEW.md",
+    "test_generation": "01_PROPOSED_TESTS.md",
+    "doc_generation": "01_GENERATED_DOCS.md",
+    "decision_capture": "01_DECISIONS.md",
+    "risk_scan": "01_RISKS_AND_BLOCKERS.md",
 }
 
 
@@ -326,10 +342,13 @@ def write_outputs(ctx: StepContext) -> StepContext:
     status_path = write_status(output_dir, status_payload)
     _record_artifact(ctx, status_path, artifact_type="status")
 
-    # 01_MORNING_BRIEF.md
-    brief_path = output_dir / "01_MORNING_BRIEF.md"
+    # Primary output (filename varies by task_type)
+    primary_filename = TASK_OUTPUT_FILENAMES.get(
+        ctx.packet.task_type, "01_MORNING_BRIEF.md"
+    )
+    brief_path = output_dir / primary_filename
     brief_path.write_text(ctx.brief_md.strip() + "\n", encoding="utf-8")
-    _record_artifact(ctx, brief_path, artifact_type="morning_brief")
+    _record_artifact(ctx, brief_path, artifact_type=ctx.packet.task_type)
 
     # 09_AUDIT_LOG.md
     audit_lines = [
@@ -425,9 +444,19 @@ def _write_cloud_candidates_file(ctx: StepContext, output_dir: Path) -> None:
 
 
 def write_obsidian(ctx: StepContext) -> StepContext:
-    """Copy the morning brief into ~/Obsidian/LocalAI-ChiefOfStaff/01_Daily_Briefs/."""
+    """Mirror the primary output into the Obsidian vault.
+
+    Routing by task_type:
+      - morning_brief -> 01_Daily_Briefs/YYYY-MM-DD.md (daily landing pad)
+      - everything else -> 02_Work_Packets/YYYY-MM-DD-<task_type>-<packet_id>.md
+    """
     try:
-        obsidian_path = write_daily_brief(ctx.brief_md, cfg=None, day=ctx.day)
+        if ctx.packet.task_type == "morning_brief":
+            obsidian_path = write_daily_brief(ctx.brief_md, config=None, day=ctx.day)
+        else:
+            obsidian_path = write_packet_output(
+                ctx.packet, ctx.brief_md, config=None, day=ctx.day
+            )
         ctx.result.obsidian_brief_path = str(obsidian_path)
     except Exception as exc:  # pragma: no cover - obsidian path issues
         ctx.result.errors.append(f"Obsidian write failed: {exc}")
@@ -542,7 +571,9 @@ def _process_one_source(
 
     record.chars_out = len(primary_response)
     evaluation = deterministic_completeness_evaluator(
-        primary_response, EVAL_REQUIRED_TERMS
+        primary_response,
+        EVAL_REQUIRED_TERMS,
+        required_citation_count=_citation_floor(ctx.packet),
     )
     record.evaluation_passed = bool(evaluation.pass_)
     _maybe_save_evaluation(ctx, evaluation=evaluation, file_path=source_path)
@@ -566,7 +597,9 @@ def _process_one_source(
         if secondary_response is not None:
             record.secondary_chars_out = len(secondary_response)
             sec_eval = deterministic_completeness_evaluator(
-                secondary_response, EVAL_REQUIRED_TERMS
+                secondary_response,
+                EVAL_REQUIRED_TERMS,
+                required_citation_count=_citation_floor(ctx.packet),
             )
             _maybe_save_evaluation(
                 ctx, evaluation=sec_eval, file_path=source_path
@@ -646,6 +679,17 @@ def _call_extract(
 # =============================================================================
 # Helpers (private; not part of the step graph)
 # =============================================================================
+
+
+def _citation_floor(packet) -> int:
+    """How many 'Source:' citations to require in an extraction.
+
+    Returns 0 when the packet does not require grounding (default). When
+    ``grounding_required=True`` we ask for at least three, which matches the
+    minimum number of distinct sections in the morning_brief and code_review
+    extraction templates that produce citations.
+    """
+    return 3 if getattr(packet, "grounding_required", False) else 0
 
 
 def _classify_task(loaded: dict[str, Any]) -> tuple[str, str]:
