@@ -1,8 +1,46 @@
 # Local AI Orchestrator
 
-Private, local-first AI work orchestration for a Mac. The system is designed to clarify vague work before doing anything heavy: it builds a work packet, asks strong questions, scores readiness, and only prepares overnight execution when enough context exists.
+[![tests](https://github.com/dejansaudi/AI_Orchestrator/actions/workflows/tests.yml/badge.svg)](https://github.com/dejansaudi/AI_Orchestrator/actions/workflows/tests.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.13+-blue.svg)](pyproject.toml)
+[![ollama](https://img.shields.io/badge/runtime-Ollama-black.svg)](https://ollama.com)
+[![macOS](https://img.shields.io/badge/macOS-26+-lightgrey.svg)](README.md)
 
-This is not a chatbot. V1 is a usable clarification and control scaffold. Full overnight execution is still scaffolded.
+**Private, local-first AI work orchestration. Drop a vague request in the evening, wake up to a structured morning brief or code review — without sending a byte to the cloud.**
+
+It is not a chatbot. It is a system that:
+
+1. **Clarifies** vague work before doing anything heavy — refuses to act until a 9-dimension readiness check passes (≥ 0.85, or ≥ 0.90 for high-stakes packets).
+2. **Routes by task type** — `morning_brief`, `code_review`, `test_generation`, etc. — each with its own prompts and output shape.
+3. **Runs locally on Ollama**, with a secondary retry chain (`local-main` → `local-secondary` 70B) when the deterministic evaluator says output is weak.
+4. **Catalogs cloud-review candidates** only when local execution fails. Default-off; never spends a token unless you explicitly opt in.
+5. **Writes a full audit trail** to Postgres + filesystem. One command exports everything as JSON for compliance review.
+
+## Who this is for
+
+| You are… | What you get |
+|---|---|
+| **Indie dev with privacy needs** | `bash scripts/review_code.sh path/to/file.py` → overnight code review. $0/month, code never leaves your machine. |
+| **Researcher / regulated work** | Full audit export, grounding/citation enforcement, default-off cloud, reproducibility hash hooks. |
+| **AI-safety engineer** | A reference architecture for fail-closed gates, visible day-unlock, catalog-then-escalate cloud routing — MIT licensed, citable. |
+| **Wanting interactive autocomplete** | Wrong tool. Use Cursor or Copilot. This is a batch system. |
+
+## 30-second tour
+
+```bash
+# A vague request → questions, not output:
+bash scripts/create_work_packet.sh "Tomorrow prep" "Prepare me for tomorrow."
+# returns 7 strong questions and refuses to execute.
+
+# Answer them, get marked READY:
+bash scripts/answer_questions.sh <packet_id> examples/sample_answers.md
+
+# Or, for code: a single command, synchronous review of one file
+bash scripts/review_code.sh assistant_core/safety.py
+
+# Audit anything that ran:
+bash scripts/export_audit.sh <packet_id> > my_audit.json
+```
 
 ## Fast Setup
 
