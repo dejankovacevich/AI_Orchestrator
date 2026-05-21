@@ -1,6 +1,6 @@
 # Local AI Orchestrator
 
-[![tests](https://github.com/dejankovacevich/AI_Orchestrator/actions/workflows/tests.yml/badge.svg)](https://github.com/dejankovacevich/AI_Orchestrator/actions/workflows/tests.yml)
+[![tests](https://github.com/dejan-kovac/AI_Orchestrator/actions/workflows/tests.yml/badge.svg)](https://github.com/dejan-kovac/AI_Orchestrator/actions/workflows/tests.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.13+-blue.svg)](pyproject.toml)
 [![ollama](https://img.shields.io/badge/runtime-Ollama-black.svg)](https://ollama.com)
@@ -480,9 +480,9 @@ Scaffolded:
 PRs welcome. Quick on-ramp:
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md) — short, practical, lists what makes a good PR.
-2. Skim [ROADMAP.md](ROADMAP.md) or the [`good-first-issue`](https://github.com/dejankovacevich/AI_Orchestrator/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue) tag for starter work.
+2. Skim [ROADMAP.md](ROADMAP.md) or the [`good-first-issue`](https://github.com/dejan-kovac/AI_Orchestrator/issues?q=is%3Aopen+is%3Aissue+label%3Agood-first-issue) tag for starter work.
 3. Run `bash scripts/run_tests.sh` locally before opening the PR.
-4. Open a [GitHub Discussion](https://github.com/dejankovacevich/AI_Orchestrator/discussions) for anything bigger than a single concept.
+4. Open a [GitHub Discussion](https://github.com/dejan-kovac/AI_Orchestrator/discussions) for anything bigger than a single concept.
 
 The project is intentionally private-first. Safety defaults (no cloud without explicit gates, no external writes, day-mode model-loading lock, fail-closed everywhere) are part of the intent, not friction. Please keep them.
 

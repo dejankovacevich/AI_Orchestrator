@@ -19,7 +19,7 @@ Read AGENTS.md before your first PR. The short version:
 ## Setup
 
 ```bash
-git clone https://github.com/dejankovacevich/AI_Orchestrator.git
+git clone https://github.com/dejan-kovac/AI_Orchestrator.git
 cd AI_Orchestrator
 bash scripts/check_system.sh
 bash scripts/install_core.sh
