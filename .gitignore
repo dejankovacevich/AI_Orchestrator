@@ -12,6 +12,9 @@ config/litellm.yaml
 logs/*.log
 logs/*.jsonl
 launchd/*.plist
+
+# Personal working notes that live alongside the repo but are not part of it
+claude-underline-work-files/
 *.egg-info/
 .worktrees/
 worktrees/

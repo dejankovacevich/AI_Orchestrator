@@ -103,5 +103,5 @@ PDF generation.
 - Personal names replaced with `Scope1` placeholder in fixtures.
 - MIT license with author metadata in `pyproject.toml` and `README.md`.
 
-[Unreleased]: https://github.com/dejansaudi/AI_Orchestrator/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/dejansaudi/AI_Orchestrator/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dejankovacevich/AI_Orchestrator/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dejankovacevich/AI_Orchestrator/releases/tag/v0.1.0
