@@ -37,6 +37,7 @@ class AssistantConfig(BaseModel):
     cloud_fallback_enabled: bool = False
     cloud_fallback_policy: str = "explicit_only"
     daily_cloud_budget_usd: float = 5.0
+    cloud_model_pricing: dict[str, Any] = Field(default_factory=dict)
     archive_processed_files: bool = True
     no_original_file_modification: bool = True
     no_email_sending: bool = True

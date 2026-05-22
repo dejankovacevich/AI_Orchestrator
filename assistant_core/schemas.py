@@ -205,6 +205,7 @@ class CloudCandidate(BaseModel):
     escalated: bool = False
     cloud_response_chars: int = 0
     estimated_cost_usd: float | None = None
+    cloud_response_path: str | None = None
 
 
 class ExecutionResult(BaseModel):

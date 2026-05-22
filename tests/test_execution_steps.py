@@ -422,6 +422,43 @@ def test_cloud_review_gate_blocks_when_file_outside_cloud_review_dir(
     assert c.escalated is False
 
 
+def test_cloud_review_gate_escalates_when_gates_pass(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
+    ctx.cfg.cloud_fallback_enabled = True
+    ctx.packet.cloud_policy = {"allowed": True, "explicit": True}
+    ctx.packet.high_stakes = True
+    path = tmp_path / "LocalAI/inbox/cloud_review/file.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("needs review", encoding="utf-8")
+    ctx.result.file_records.append(
+        FileExecutionRecord(file_path=str(path), needs_cloud_review=True)
+    )
+
+    monkeypatch.setattr(
+        steps,
+        "run_cloud_review_call",
+        lambda **kwargs: (
+            kwargs["candidate"].model_copy(
+                update={
+                    "escalated": True,
+                    "cloud_response_chars": 3,
+                    "estimated_cost_usd": 0.01,
+                }
+            ),
+            0.01,
+        ),
+    )
+
+    steps.cloud_review_gate(ctx)
+
+    c = ctx.result.cloud_candidates[0]
+    assert c.gate_passed is True
+    assert c.escalated is True
+    assert c.cloud_response_chars == 3
+    assert ctx.result.cloud_calls_made == 1
+
+
 def test_cloud_candidates_file_is_written_even_when_empty(tmp_path):
     ctx = _make_ctx(tmp_path, source_paths=[tmp_path])
     ctx.brief_md = "# Morning Brief\n"

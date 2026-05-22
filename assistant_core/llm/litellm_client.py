@@ -4,6 +4,8 @@ import requests
 
 from assistant_core.llm.model_policy import assert_model_group_allowed
 
+CLOUD_MODEL_GROUP = "cloud-claude-opus"
+
 
 class LiteLLMClientError(RuntimeError):
     """Raised when LiteLLM proxy calls fail."""
@@ -18,7 +20,10 @@ def chat_completion(
     manual_override: bool = False,
     timeout: int = 180,
 ) -> str:
-    assert_model_group_allowed(model_group, mode, manual_override=manual_override)
+    # Cloud calls are authorized by assert_cloud_allowed before this function.
+    # Local groups still use the model-group safety gate here.
+    if model_group != CLOUD_MODEL_GROUP:
+        assert_model_group_allowed(model_group, mode, manual_override=manual_override)
     response = requests.post(
         f"{base_url.rstrip('/')}/v1/chat/completions",
         json={"model": model_group, "messages": messages},

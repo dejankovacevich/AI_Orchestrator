@@ -31,6 +31,7 @@ from uuid import UUID
 
 from assistant_core.execution.context import StepContext
 from assistant_core.execution.evaluators import deterministic_completeness_evaluator
+from assistant_core.execution.cloud_review import run_cloud_review_call
 from assistant_core.execution.file_utils import (
     UnsupportedFileType,
     chunk_text,
@@ -214,10 +215,8 @@ def cloud_review_gate(ctx: StepContext) -> StepContext:
       1. Run it through ``assert_cloud_allowed`` with the current config.
       2. Record a CloudCandidate on ``ctx.result.cloud_candidates`` capturing
          the gate's verdict (allowed / blocked-with-reason).
-      3. When the gate allows it AND a cloud caller is wired, escalate.
-         Today no cloud caller is wired (deliberate default-off), so we
-         set ``escalated=False`` and 0 cost, and let the user wire the
-         actual call later by setting cloud_fallback_enabled + key + budget.
+      3. When the gate allows it, call LiteLLM once, save the response, and
+         stop before any call that would exceed the daily cloud budget.
 
     The 08_CLOUD_REVIEW_CANDIDATES.md output is written from the candidates
     list during ``write_outputs`` so the user can see what would have
@@ -229,6 +228,8 @@ def cloud_review_gate(ctx: StepContext) -> StepContext:
 
     cfg = ctx.cfg
     cloud_review_dir = cfg.inbox_dir / "cloud_review"
+
+    spent_so_far_usd = 0.0
 
     for record in flagged:
         candidate = CloudCandidate(
@@ -258,14 +259,16 @@ def cloud_review_gate(ctx: StepContext) -> StepContext:
             candidate.gate_passed = False
             candidate.gate_block_reason = block_reason
 
-        # When the gate passes, escalation is policy-allowed. The actual HTTP
-        # call to Claude is left for a follow-up commit (no caller wired yet)
-        # so this default-off path never spends a token.
         if candidate.gate_passed:
-            # Caller wiring lives here later. For now: mark we'd have called.
-            candidate.escalated = False
-            candidate.cloud_response_chars = 0
-            candidate.estimated_cost_usd = None
+            candidate, spent_so_far_usd = run_cloud_review_call(
+                cfg=cfg,
+                record=record,
+                candidate=candidate,
+                day=ctx.day,
+                spent_so_far_usd=spent_so_far_usd,
+                mode=ctx.mode,
+                manual_override=ctx.manual_override,
+            )
 
         ctx.result.cloud_candidates.append(candidate)
 
@@ -436,6 +439,8 @@ def _write_cloud_candidates_file(ctx: StepContext, output_dir: Path) -> None:
                     lines.append(
                         f"- Estimated cost: ${candidate.estimated_cost_usd:.4f}"
                     )
+                if candidate.cloud_response_path:
+                    lines.append(f"- Cloud response: {candidate.cloud_response_path}")
             lines.append("")
 
     target = output_dir / "08_CLOUD_REVIEW_CANDIDATES.md"

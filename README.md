@@ -465,6 +465,7 @@ Implemented:
 - basic memory scaffolding
 - basic control panel
 - tests and validation scripts
+- Claude review path after policy gates
 
 Scaffolded:
 
@@ -473,7 +474,6 @@ Scaffolded:
 - quality-gated local retry loop
 - real pause/resume UI
 - semantic memory indexing workflow
-- Claude review path after policy gates
 
 ## Contributing
 
