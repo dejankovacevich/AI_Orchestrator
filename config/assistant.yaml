@@ -29,6 +29,10 @@ block_execution_if_output_unclear: true
 cloud_fallback_enabled: false
 cloud_fallback_policy: explicit_only
 daily_cloud_budget_usd: 5.00
+cloud_model_pricing:
+  cloud-claude-opus:
+    input_per_1k_usd: 0.015
+    output_per_1k_usd: 0.075
 
 archive_processed_files: true
 no_original_file_modification: true
