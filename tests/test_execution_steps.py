@@ -197,6 +197,54 @@ def test_process_sources_extracts_via_backend(tmp_path):
     assert ctx.result.model_calls == 1
 
 
+def test_process_sources_self_consistency_merges_multiple_samples(tmp_path):
+    inbox = tmp_path / "inbox"
+    inbox.mkdir()
+    (inbox / "note.md").write_text("a meaningful note", encoding="utf-8")
+
+    responses = iter(
+        [
+            "## Priorities\n- alpha\n## Decisions needed\n- ship\n## Risks / Blockers\n- latency\n",
+            "## Priorities\n- beta\n## Decisions needed\n- ship\n## Risks / Blockers\n- budget\n",
+            "## Priorities\n- alpha\n## Decisions needed\n- confirm owner\n## Risks / Blockers\n- latency\n",
+        ]
+    )
+
+    def backend(group, prompt, mode_, override):
+        return next(responses)
+
+    ctx = _make_ctx(tmp_path, source_paths=[inbox], backend=backend)
+    ctx.cfg.self_consistency.enabled = True
+    ctx.cfg.self_consistency.samples = 3
+    steps.scan_sources(ctx)
+    steps.process_sources(ctx)
+
+    assert ctx.result.files_processed == 1
+    assert ctx.result.model_calls == 3
+    extraction = ctx.extractions[0][1]
+    assert "- alpha" in extraction
+    assert "- beta" in extraction
+    assert "- ship" in extraction
+    assert "- confirm owner" in extraction
+    assert "- latency" in extraction
+    assert "- budget" in extraction
+
+
+def test_merge_extractions_keeps_compatible_sections_and_unique_bullets():
+    merged = steps._merge_extractions(
+        [
+            "## Priorities\n- alpha\n## Decisions needed\n- ship\n",
+            "## Priorities\n- beta\n## Decisions needed\n- ship\n",
+        ],
+        "majority_section",
+    )
+
+    assert "## Priorities" in merged
+    assert "- alpha" in merged
+    assert "- beta" in merged
+    assert merged.count("- ship") == 1
+
+
 def test_process_sources_failed_backend_marks_partial_failure(tmp_path):
     inbox = tmp_path / "inbox"
     inbox.mkdir()

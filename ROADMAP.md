@@ -14,7 +14,7 @@ section 8 is the source of truth; this file is the human-readable view.
       to `MORNING_BRIEF_EXTRACT_TEMPLATE` and `CODE_REVIEW_EXTRACT_TEMPLATE`
       in `assistant_core/execution/prompts.py`. Measure quality on a
       small held-out set. Typically +5-15% completeness.
-- [ ] **Self-consistency voting** in `assistant_core/execution/steps.py`.
+- [x] **Self-consistency voting** in `assistant_core/execution/steps.py`.
       Run extraction N times (config-driven, default 3), merge by
       majority. Largest single quality bump for mid-tier local models.
 - [ ] **Self-critique loop.** After extraction, ask a local model to

@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+class SelfConsistencyConfig(BaseModel):
+    enabled: bool = False
+    samples: int = 3
+    merge_strategy: str = "majority_section"
+
+
 class AssistantConfig(BaseModel):
     local_ai_root: Path
     inbox_dir: Path
@@ -47,6 +53,7 @@ class AssistantConfig(BaseModel):
     max_chars_per_chunk: int = 12000
     temperature: float = 0.2
     top_p: float = 0.9
+    self_consistency: SelfConsistencyConfig = Field(default_factory=SelfConsistencyConfig)
 
 
 class MemoryConfig(BaseModel):
