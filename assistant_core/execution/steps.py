@@ -562,7 +562,7 @@ def _process_one_source(
         kind=kind,
         content=primary_content,
     )
-    primary_response, primary_error = _call_extract(
+    primary_response, primary_error = _call_primary_extract(
         ctx, primary_group, prompt, source_path, record.primary_model_tag
     )
     if primary_response is None:
@@ -617,6 +617,33 @@ def _process_one_source(
     # response. Flag for cloud review and return the primary output.
     record.needs_cloud_review = True
     return record, primary_response
+
+
+def _call_primary_extract(
+    ctx: StepContext,
+    model_group: str,
+    prompt: str,
+    source_path: str,
+    actual_tag: str | None,
+) -> tuple[str | None, str | None]:
+    cfg = ctx.cfg.self_consistency
+    if not cfg.enabled or cfg.samples <= 1:
+        return _call_extract(ctx, model_group, prompt, source_path, actual_tag)
+
+    responses: list[str] = []
+    errors: list[str] = []
+    for _ in range(cfg.samples):
+        response, error = _call_extract(ctx, model_group, prompt, source_path, actual_tag)
+        if response is not None:
+            responses.append(response)
+        elif error:
+            errors.append(error)
+
+    if not responses:
+        return None, errors[-1] if errors else f"{model_group} model failed"
+    if len(responses) == 1:
+        return responses[0], None
+    return _merge_extractions(responses, cfg.merge_strategy), None
 
 
 def _call_extract(
@@ -674,6 +701,51 @@ def _call_extract(
         error=None,
     )
     return response, None
+
+
+def _merge_extractions(responses: list[str], strategy: str) -> str:
+    """Merge multiple extraction samples into one sectioned markdown response."""
+    if not responses:
+        return ""
+    if strategy == "longest_common":
+        return max(responses, key=len)
+    if strategy != "majority_section":
+        return responses[0]
+
+    section_order: list[str] = []
+    section_items: dict[str, list[str]] = {}
+
+    for response in responses:
+        current = "## Notes"
+        if current not in section_items:
+            section_order.append(current)
+            section_items[current] = []
+
+        for raw_line in response.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("## "):
+                current = line
+                if current not in section_items:
+                    section_order.append(current)
+                    section_items[current] = []
+                continue
+            if not line.startswith("- "):
+                line = f"- {line}"
+            if line not in section_items[current]:
+                section_items[current].append(line)
+
+    lines: list[str] = []
+    for section in section_order:
+        items = section_items[section]
+        if not items:
+            continue
+        lines.append(section)
+        lines.extend(items)
+        lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
 
 
 # =============================================================================

@@ -41,3 +41,8 @@ max_local_attempts: 2
 max_chars_per_chunk: 12000
 temperature: 0.2
 top_p: 0.9
+
+self_consistency:
+  enabled: false
+  samples: 3
+  merge_strategy: majority_section
